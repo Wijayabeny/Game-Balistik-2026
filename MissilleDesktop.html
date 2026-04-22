@@ -1,0 +1,2356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280">
+    <title>BALLISTIC STRIKE 2026 — GLOBAL DEFENSE SIMULATOR Rev32 [DESKTOP]</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+        *{margin:0;padding:0;box-sizing:border-box;}
+        :root{--neon:#00ff41;--bg:#020408;--panel:#070d14;--danger:#ff0000;--fire:#ff3300;--accent:#00aaff;--gold:#ffcc00;--purple:#aa44ff;--steel:#1a2030;--border:#1e3a5f;--text-dim:#4a7a9b;--sidebar-w:380px;}
+        body{font-family:'Share Tech Mono',monospace;background:var(--bg);color:var(--neon);overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;}
+
+        /* ── TOP HUD BAR ── */
+        .hud-top{flex-shrink:0;height:48px;background:linear-gradient(180deg,rgba(2,4,8,0.99) 0%,rgba(2,4,8,0.85) 100%);border-bottom:1px solid #0d2a50;z-index:1001;display:flex;align-items:center;justify-content:space-between;padding:0 20px;gap:16px;}
+        .hud-title{font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:#00aaff;letter-spacing:4px;text-transform:uppercase;white-space:nowrap;}
+        .hud-title span{color:#ff3300;}
+        .hud-counters{display:flex;gap:20px;font-size:11px;color:var(--text-dim);align-items:center;}
+        .hud-counters b{color:#ffcc00;font-size:14px;}
+        .hud-launcher-pill{font-size:11px;color:var(--text-dim);}
+        .hud-status{font-size:11px;padding:4px 14px;border:1px solid #1e3a5f;border-radius:2px;letter-spacing:2px;white-space:nowrap;}
+        .hud-status.armed{color:#00ff41;border-color:#00ff41;box-shadow:0 0 10px rgba(0,255,65,0.3);}
+        .hud-status.flying{color:#ff3300;border-color:#ff3300;animation:blink .4s infinite;}
+
+        /* ── MAIN AREA: sidebar + map ── */
+        .main-area{flex:1;display:flex;overflow:hidden;min-height:0;}
+
+        /* ── LEFT SIDEBAR (fixed desktop panel) ── */
+        #sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);max-width:var(--sidebar-w);height:100%;background:rgba(2,4,8,0.98);border-right:1px solid #0a2a50;overflow-y:auto;overflow-x:hidden;z-index:100;display:flex;flex-direction:column;flex-shrink:0;}
+        #sidebar.open{transform:none !important;}
+        .sidebar-inner{padding:14px 16px 24px;flex:1;}
+        /* hide mobile-only drag handle and close btn */
+        .drag-handle{display:none;}
+        .close-btn{display:none;}
+        /* hide floating menu button */
+        .menu-btn{display:none !important;}
+
+        /* ── MAP ── */
+        #map-wrap{flex:1;position:relative;overflow:hidden;}
+        #map{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;filter:brightness(0.9) contrast(1.15) saturate(0.8);}
+
+        @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+        /* ── SIDEBAR INTERNALS ── */
+        .sec-title{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;color:#00aaff;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid #0a2040;padding-bottom:6px;margin:16px 0 9px;}
+        .instruction-badge{background:#050a10;padding:8px 12px;font-size:9px;text-align:center;margin-bottom:10px;border:1px solid #0a2040;color:#4a6a7a;line-height:1.7;}
+        .instruction-badge span{color:#00aaff;}
+
+        /* Missile tabs */
+        .missile-tabs{display:flex;gap:4px;margin-bottom:9px;flex-wrap:wrap;}
+        .missile-tab{padding:5px 9px;background:#0a1520;border:1px solid #1e3a5f;color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:2px;cursor:pointer;letter-spacing:.5px;transition:all .15s;}
+        .missile-tab.active{background:#0a2540;border-color:#00aaff;color:#00aaff;}
+        .missile-tab:hover{border-color:#335577;color:#88bbcc;}
+
+        /* Cards */
+        .missile-cards{display:flex;flex-direction:column;gap:6px;}
+        .missile-card{background:#070d14;border:1px solid #1e3a5f;border-radius:4px;padding:10px 12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;}
+        .missile-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#1e3a5f;transition:background .15s;}
+        .missile-card.selected{border-color:#00aaff;background:#0a1a2e;}
+        .missile-card.selected::before{background:#00aaff;}
+        .missile-card:hover{border-color:#336699;}
+        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+        .card-name{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;color:#fff;}
+        .card-threat{font-size:8px;padding:2px 6px;border-radius:2px;font-weight:bold;}
+        .threat-LOW{background:#1a3a1a;color:#44ff44;border:1px solid #44ff44;}
+        .threat-MEDIUM{background:#3a2a0a;color:#ffaa44;border:1px solid #ffaa44;}
+        .threat-HIGH{background:#3a1a0a;color:#ff6644;border:1px solid #ff6644;}
+        .threat-EXTREME{background:#3a0a0a;color:#ff2222;border:1px solid #ff2222;animation:blink .8s infinite;}
+        .card-sub{font-size:9px;color:var(--text-dim);margin-bottom:6px;}
+        .card-info{font-size:8px;color:#4a6a7a;margin-top:5px;line-height:1.4;border-top:1px solid #0a2040;padding-top:5px;}
+        .card-counters{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;}
+        .counter-tag{font-size:7px;padding:1px 5px;background:#0a1520;border:1px solid #1e3a5f;border-radius:10px;color:#4a8aaa;}
+
+        /* Defense cards */
+        .defense-cards{display:flex;flex-direction:column;gap:6px;}
+        .defense-card{background:#070d14;border:1px solid #1e3a5f;border-radius:4px;padding:8px 12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;}
+        .defense-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#1e3a5f;}
+        .defense-card.selected{border-color:#00ff41;background:#0a1e0a;}
+        .defense-card.selected::before{background:#00ff41;}
+        .defense-card:hover{border-color:#225533;}
+        .def-header{display:flex;justify-content:space-between;align-items:center;}
+        .def-name{font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:#88ccff;}
+        .def-tier{font-size:7px;padding:1px 5px;border-radius:2px;}
+        .tier-1{background:#1a2a1a;color:#44ff88;border:1px solid #44ff88;}
+        .tier-2{background:#1a2a3a;color:#44aaff;border:1px solid #44aaff;}
+        .tier-3{background:#2a1a3a;color:#aa44ff;border:1px solid #aa44ff;}
+        .tier-4{background:#3a1a1a;color:#ff4444;border:1px solid #ff4444;}
+        .def-sub{font-size:8px;color:var(--text-dim);margin-top:2px;}
+        .def-info{font-size:8px;color:#4a6a7a;margin-top:4px;line-height:1.4;border-top:1px solid #0a2040;padding-top:4px;}
+        .def-targets{margin-top:3px;display:flex;gap:3px;flex-wrap:wrap;}
+        .target-tag{font-size:7px;padding:1px 4px;background:#0a2030;border:1px solid #1e3a5f;border-radius:2px;color:#6aaabb;}
+
+        /* Inputs / Controls */
+        .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+        .input-box{background:#070d14;border:1px solid #1e3a5f;padding:7px 9px;border-radius:3px;}
+        label{display:block;font-size:9px;color:#4a7a9b;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;}
+        input{width:100%;background:transparent;border:none;border-bottom:1px solid #1e3a5f;color:#aaccee;outline:none;font-family:'Share Tech Mono',monospace;font-size:12px;padding:3px 0;}
+        input:focus{border-bottom-color:#00aaff;}
+        input[readonly]{color:#4a6a7a;cursor:not-allowed;}
+        .specs-locked{background:#050a10;border:1px solid #0a2040;border-radius:4px;padding:9px 11px;margin-bottom:9px;}
+        .specs-locked-title{font-size:9px;color:#0a4070;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px;}
+        .specs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+        .spec-item{font-size:9px;color:#2a5a7a;}
+        .spec-item b{color:#4a8aaa;display:block;font-size:10px;}
+
+        /* Buttons */
+        .btn-add{width:100%;padding:9px;font-family:'Share Tech Mono',monospace;cursor:pointer;border-radius:3px;font-size:11px;margin-top:6px;border:1px solid #3a9a3a;background:#051005;color:#55dd55;letter-spacing:1px;transition:background .15s;}
+        .btn-add:hover{background:#0a1e0a;}
+        .btn-reset{width:100%;padding:9px;font-family:'Share Tech Mono',monospace;cursor:pointer;border-radius:3px;font-size:11px;margin-top:6px;border:1px solid #2a3a4a;background:#070d14;color:#4a7a9b;letter-spacing:1px;transition:background .15s;}
+        .btn-reset:hover{background:#0d1620;}
+        .btn-map-mode{width:100%;padding:9px;font-family:'Share Tech Mono',monospace;cursor:pointer;border-radius:3px;font-size:11px;margin-top:6px;border:1px solid #2266aa;background:#040a14;color:#4488cc;letter-spacing:1px;transition:background .15s;}
+        .btn-map-mode:hover{background:#081422;}
+        .btn-row{display:flex;gap:6px;margin-top:8px;}
+        .btn-half{flex:1;padding:7px;font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;border-radius:3px;border:1px solid #1e3a5f;background:#070d14;color:#4a7a9b;}
+        .btn-half:hover{background:#0d1620;}
+
+        /* Telemetry */
+        #telemetry{background:#020408;border:1px solid #0a2040;padding:9px;margin-top:10px;font-size:9px;height:110px;overflow-y:auto;white-space:pre-wrap;color:#2a7a4a;font-family:'Share Tech Mono',monospace;line-height:1.5;border-radius:3px;}
+
+        /* Scrollbar */
+        ::-webkit-scrollbar{width:4px;background:#070d14;}
+        ::-webkit-scrollbar-thumb{background:#0a3060;border-radius:2px;}
+        ::-webkit-scrollbar-thumb:hover{background:#1a5090;}
+
+        /* State badges */
+        .state-badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:9px;font-weight:bold;letter-spacing:1px;vertical-align:middle;}
+        .state-idle{background:#0a1520;color:#4a6a7a;border:1px solid #1e3a5f;}
+        .state-ready{background:#0a1a08;color:#44cc44;border:1px solid #338833;}
+        .state-moving{background:#1a2a0a;color:#88ff44;border:1px solid #66cc22;animation:blink .6s infinite;}
+        .state-standby{background:#1a1a2a;color:#4488cc;border:1px solid #2266aa;}
+        .state-siaga{background:#2a0808;color:#ff4422;border:1px solid #cc2200;box-shadow:0 0 6px rgba(255,68,34,0.4);animation:blink .5s infinite;}
+
+        /* Route / misc */
+        .route-picking-cursor{cursor:crosshair !important;}
+        .route-picking-cursor .leaflet-container{cursor:crosshair !important;}
+        .btn-route{width:100%;padding:9px;font-family:'Share Tech Mono',monospace;cursor:pointer;border-radius:3px;font-size:10px;margin-top:5px;border:1px solid #2a7a2a;background:#040e04;color:#44aa44;letter-spacing:1px;}
+        .btn-route.picking{border-color:#ffcc00;color:#ffcc00;background:#0e0e00;animation:blink .5s infinite;}
+        .btn-go{width:100%;padding:10px;font-family:'Orbitron',monospace;font-weight:700;cursor:pointer;border-radius:3px;font-size:11px;margin-top:6px;border:1px solid #3a9a3a;background:#051005;color:#55dd55;letter-spacing:2px;}
+        .btn-go:disabled{opacity:0.3;cursor:not-allowed;}
+        .btn-stop{padding:6px 12px;font-family:'Share Tech Mono',monospace;cursor:pointer;border-radius:3px;font-size:10px;border:1px solid #994400;background:#0e0500;color:#ff8833;letter-spacing:1px;}
+
+        /* Truck icons */
+        .truck-wrap{position:relative;width:46px;height:46px;display:flex;align-items:center;justify-content:center;}
+        .truck-wrap .t-dot{position:absolute;top:0;right:0;width:11px;height:11px;border-radius:50%;border:2px solid #000;}
+        .t-dot-idle{background:#4a6a7a;}
+        .t-dot-ready{background:#44cc44;}
+        .t-dot-moving{background:#88ff44;animation:blink .4s infinite;}
+        .t-dot-standby{background:#4488cc;}
+        .t-dot-siaga{background:#ff4422;box-shadow:0 0 5px #ff4422;animation:blink .3s infinite;}
+        .truck-emoji-fb{width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:22px;border:2px solid #888;}
+        .reload-progress{width:100%;height:3px;background:#333;margin-top:2px;}
+        .reload-bar{height:3px;background:#ffaa44;width:0%;}
+
+        /* Popups */
+        .popup-buttons{display:flex;flex-direction:column;gap:5px;margin-top:6px;}
+        .popup-buttons button{font-size:10px;padding:7px 9px;margin:0;cursor:pointer;border-radius:3px;font-family:'Share Tech Mono',monospace;letter-spacing:.5px;transition:all .15s;width:100%;text-align:left;}
+        .popup-buttons button:hover:not(:disabled){filter:brightness(1.2);}
+        .popup-buttons button:disabled{opacity:0.35;cursor:not-allowed;}
+        .leaflet-popup-content-wrapper{background:#070d14 !important;color:#aaccee !important;border:1px solid #1e3a5f !important;border-radius:4px !important;box-shadow:0 0 24px rgba(0,170,255,0.3) !important;font-family:'Share Tech Mono',monospace !important;font-size:10px !important;}
+        .leaflet-popup-tip{background:#070d14 !important;}
+        .leaflet-popup-content{margin:12px 14px !important;min-width:200px !important;color:#aaccee !important;}
+        .leaflet-popup{z-index:2000 !important;}
+        .pu-title{font-family:'Orbitron',monospace;font-size:11px;color:#00aaff;font-weight:700;margin-bottom:6px;}
+        .pu-row{font-size:9px;color:#4a7a9b;margin-bottom:3px;}
+        .pu-row b{color:#aaccee;}
+        .pu-btn-green{border:1px solid #2a8a2a;background:#040e04;color:#55dd55;}
+        .pu-btn-green:hover:not(:disabled){background:#0a1e0a;}
+        .pu-btn-blue{border:1px solid #2266aa;background:#040a14;color:#4488cc;}
+        .pu-btn-blue:hover:not(:disabled){background:#081422;}
+        .pu-btn-red{border:1px solid #cc2200;background:#140400;color:#ff4422;}
+        .pu-btn-red:hover:not(:disabled){background:#1e0800;}
+        .pu-btn-orange{border:1px solid #884400;background:#0e0500;color:#ff8833;}
+        .pu-btn-orange:hover:not(:disabled){background:#160b00;}
+        .pu-btn-grey{border:1px solid #2a3a4a;background:#070d14;color:#4a7a9b;}
+        .pu-btn-grey:hover:not(:disabled){background:#0d1620;}
+        .pu-btn-gold{border:1px solid #aa8800;background:#0e0a00;color:#ffcc00;}
+        .pu-btn-gold:hover:not(:disabled){background:#1a1200;}
+
+        /* Missile / explosion animations */
+        .leaflet-marker-icon.missile-wrapper{transform-origin:center center !important;}
+        .missile-container{position:relative;width:20px;height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;transform-origin:center center;}
+.missile-body{width:9px;height:36px;background:linear-gradient(90deg,#1a1a1a 0%,#bdc3c7 50%,#1a1a1a 100%);position:relative;border:.5px solid #000;z-index:2;}
+.missile-nose{position:absolute;top:-10px;left:-.5px;width:9px;height:11px;background:linear-gradient(90deg,#1a1a1a 0%,#bdc3c7 50%,#1a1a1a 100%);clip-path:polygon(50% 5%,95% 100%,5% 100%);border-radius:2px 2px 0 0;}
+.missile-fin{position:absolute;width:7px;height:9px;background:#2c3e50;bottom:0;}
+.fin-left{left:-6px;clip-path:polygon(100% 0,100% 100%,0 100%);}
+.fin-right{right:-6px;clip-path:polygon(0 0,0 100%,100% 100%);}
+        .flame-boost{width:10px;height:28px;background:linear-gradient(to bottom,#ffaa00,#ff4d00,#ff2200);filter:blur(2px);margin-top:-2px;animation:boostFlicker .03s infinite alternate;border-radius:0 0 4px 4px;}
+        .flame-ascent{width:8px;height:18px;background:linear-gradient(to bottom,#fff5cc,#ffaa33,#ff8833);filter:blur(1.5px);margin-top:-2px;animation:ascentGlow .08s infinite alternate;border-radius:0 0 3px 3px;}
+        .smoke-trail{width:12px;height:14px;background:radial-gradient(ellipse,rgba(180,180,200,.7) 0%,rgba(120,120,140,.4) 50%,transparent 80%);filter:blur(3px);margin-top:-2px;border-radius:50%;opacity:.6;}
+        .reentry-plasma{position:absolute;top:-15px;left:-15px;width:50px;height:70px;background:radial-gradient(ellipse,rgba(255,68,170,.8) 0%,rgba(255,68,68,.4) 40%,transparent 80%);filter:blur(8px);z-index:0;border-radius:50%;animation:plasmaPulse .1s infinite alternate;pointer-events:none;}
+        .hgv-plasma{position:absolute;top:-20px;left:-20px;width:60px;height:80px;background:radial-gradient(ellipse,rgba(170,68,255,.9) 0%,rgba(68,68,255,.5) 40%,transparent 80%);filter:blur(10px);z-index:0;border-radius:50%;animation:plasmaPulse .05s infinite alternate;pointer-events:none;}
+        .css-explosion{position:relative;width:90px;height:90px;pointer-events:none;}
+        .css-explosion .ring{position:absolute;border-radius:50%;animation:ringExpand 0.6s ease-out forwards;}
+        .css-explosion .ring1{width:50px;height:50px;top:0;left:0;background:radial-gradient(circle,#fff8e0 0%,#ffcc00 25%,#ff6600 55%,transparent 75%);animation-duration:0.55s;}
+        .css-explosion .ring2{width:60px;height:60px;top:15px;left:15px;background:radial-gradient(circle,#fff 0%,#ffeeaa 30%,transparent 70%);animation-duration:0.4s;}
+        .css-explosion .spark{position:absolute;width:4px;height:4px;background:#ffcc00;border-radius:50%;animation:sparkFly 0.5s ease-out forwards;}
+        @keyframes ringExpand{0%{transform:scale(0.1);opacity:1;}60%{opacity:0.9;}100%{transform:scale(2.2);opacity:0;}}
+        @keyframes sparkFly{0%{transform:translate(0,0) scale(1);opacity:1;}100%{transform:translate(var(--sx),var(--sy)) scale(0);opacity:0;}}
+        .intercept-flash{position:relative;width:50px;height:50px;pointer-events:none;animation:flashFade 0.5s ease-out forwards;}
+        .intercept-flash .core{position:absolute;width:50px;height:50px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#88ffff 30%,transparent 70%);top:0;left:0;animation:flashCore 0.4s ease-out forwards;}
+        @keyframes flashCore{0%{transform:scale(0.2);opacity:1;}100%{transform:scale(2);opacity:0;}}
+        @keyframes flashFade{0%{opacity:1;}100%{opacity:0;}}
+        .history-marker-container{position:relative;display:flex;justify-content:center;align-items:center;pointer-events:none;z-index:1500;}
+        .history-gif{width:65px;height:65px;object-fit:contain;filter:drop-shadow(0 0 5px #aa5533);}
+        .defense-battery-marker{cursor:pointer;}
+        @keyframes boostFlicker{0%{opacity:.7;height:24px;}100%{opacity:1;height:32px;}}
+        @keyframes ascentGlow{0%{opacity:.6;height:16px;}100%{opacity:.9;height:20px;}}
+        @keyframes plasmaPulse{0%{opacity:.5;transform:scale(.9);}100%{opacity:1;transform:scale(1.1);}}
+        @keyframes explodeFade{0%{opacity:1;transform:scale(0.5);}30%{opacity:1;transform:scale(1.3);}100%{opacity:0;transform:scale(2.2);visibility:hidden;}}
+        @keyframes pulse{0%{transform:scale(1);opacity:.6;}100%{transform:scale(1.3);opacity:0;}}
+        @keyframes radar-sweep{0%{transform:scale(.8);opacity:.8;}100%{transform:scale(1.4);opacity:0;}}
+        @keyframes death-pulse{0%,100%{transform:scale(.9);opacity:.6;}50%{transform:scale(1.2);opacity:1;}}
+        .target-marker{width:28px;height:28px;position:relative;}
+        .target-marker .death-ring{position:absolute;width:28px;height:28px;border:2px solid #aa2222;border-radius:50%;animation:death-pulse 1s infinite;}
+        .target-marker .death-core{position:absolute;width:10px;height:10px;background:#ff0000;border-radius:50%;top:9px;left:9px;}
+        .target-marker .skull-icon{position:absolute;font-size:14px;top:-8px;left:4px;}
+
+        /* Desktop sidebar resize handle */
+        #sidebar-resize{position:absolute;top:0;right:-3px;width:6px;height:100%;cursor:col-resize;z-index:200;background:transparent;}
+        #sidebar-resize:hover{background:rgba(0,170,255,0.15);}
+
+        /* Keyboard shortcuts bar */
+        .shortcuts-bar{display:flex;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid #0a2040;margin-top:4px;}
+        .key-badge{font-size:8px;padding:2px 6px;background:#0a1520;border:1px solid #1e3a5f;border-radius:3px;color:#4a8aaa;white-space:nowrap;}
+        .key-badge kbd{color:#00aaff;font-family:'Share Tech Mono',monospace;}
+    </style>
+</head>
+<body>
+<div class="hud-top">
+    <div class="hud-title">BALLISTIC STRIKE <span>2026</span> <span style="font-size:9px;color:#4a7a9b;letter-spacing:1px;">DESKTOP</span></div>
+    <div class="hud-counters">
+        <span>🚀 Active: <b id="activeMissileCount">0</b></span>
+        <span>🛡️ Defense: <b id="activeDefenseCount">0</b></span>
+        <span class="hud-launcher-pill">🚛 Launchers: <span id="hudLauncherCount">0</span></span>
+        <span class="hud-launcher-pill">🛡️ Batteries: <span id="hudDefenseCount">0</span></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+        <div style="font-size:9px;color:#4a7a9b;border:1px solid #0a2040;padding:3px 10px;border-radius:2px;">
+            <kbd style="color:#00aaff;">L</kbd> Launcher &nbsp;
+            <kbd style="color:#00aaff;">D</kbd> Defense &nbsp;
+            <kbd style="color:#00aaff;">R</kbd> Reset &nbsp;
+            <kbd style="color:#00aaff;">M</kbd> Map mode
+        </div>
+        <div class="hud-status" id="hudStatus">STANDBY</div>
+    </div>
+</div>
+<div class="main-area">
+    <div id="sidebar">
+        <div class="sidebar-inner">
+            <div class="instruction-badge">
+                <span>ALUR OPERASI:</span><br>
+                1️⃣ Pilih rudal di katalog &nbsp;→&nbsp; 2️⃣ ➕ ADD LAUNCHER (klik peta)<br>
+                3️⃣ Klik marker → ⚡ Siaga → 🎯 SET TARGET (klik peta)<br>
+                4️⃣ 🔴 Launch Strike &nbsp;|&nbsp; 🛡️ ADD DEFENSE pertahanan otomatis
+            </div>
+        <div class="sec-title">🚀 SELECT MISSILE SYSTEM</div>
+        <div class="missile-tabs">
+            <button class="missile-tab active" onclick="filterMissiles('ALL')">ALL</button>
+            <button class="missile-tab" onclick="filterMissiles('SRBM')">SRBM</button>
+            <button class="missile-tab" onclick="filterMissiles('MRBM')">MRBM</button>
+            <button class="missile-tab" onclick="filterMissiles('LRBM')">LRBM</button>
+            <button class="missile-tab" onclick="filterMissiles('ICBM')">ICBM</button>
+            <button class="missile-tab" onclick="filterMissiles('HGV')">HGV</button>
+            <button class="missile-tab" onclick="filterMissiles('CRUISE')">CRUISE</button>
+        </div>
+        <div class="missile-cards" id="missileCards"></div>
+        <div class="specs-locked" id="lockedSpecs">
+            <div class="specs-locked-title">🔒 LOCKED PROPULSION SPECS</div>
+            <div class="specs-grid" id="specsGrid"></div>
+        </div>
+        <div class="sec-title">🎯 TACTICAL CONTROLS</div>
+        <div class="ctrl-grid">
+            <div class="input-box"><label>AZIMUTH (deg)</label><input type="number" id="azimuth" value="0" step="0.1" readonly></div>
+            <div class="input-box"><label>PITCH (deg) <span id="pitchModeLabel" style="color:#ffaa44;font-size:7px;">MANUAL</span></label><input type="number" id="pitch" value="45" min="15" max="88"></div>
+        </div>
+        <div id="autoPitchPanel" style="background:#050a10;border:1px solid #0a2040;border-radius:4px;padding:8px 10px;margin-top:6px;display:none;">
+            <div style="font-size:8px;color:#4a8aaa;margin-bottom:6px;letter-spacing:1px;">⚡ AUTO-PITCH CALCULATOR</div>
+            <div style="font-size:9px;color:#2a6a8a;margin-bottom:5px;" id="rangeDisplay">—</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button onclick="applyAutoPitch('standard')" style="flex:1;padding:5px 4px;background:#0a1520;border:1px solid #0a4060;color:#44aacc;font-family:monospace;font-size:8px;border-radius:3px;cursor:pointer;">🎯 STANDARD<br><span style="font-size:7px;color:#2a6a8a;">Pitch 45° · Max Range</span></button>
+                <button onclick="applyAutoPitch('lofted')" style="flex:1;padding:5px 4px;background:#0a1520;border:1px solid #0a4060;color:#ffaa44;font-family:monospace;font-size:8px;border-radius:3px;cursor:pointer;">📐 LOFTED<br><span style="font-size:7px;color:#2a6a8a;">High arc · Slow descent</span></button>
+                <button onclick="applyAutoPitch('depressed')" style="flex:1;padding:5px 4px;background:#0a1520;border:1px solid #0a4060;color:#ff6644;font-family:monospace;font-size:8px;border-radius:3px;cursor:pointer;">📉 DEPRESSED<br><span style="font-size:7px;color:#2a6a8a;">Low arc · Hard to intercept</span></button>
+            </div>
+            <div id="pitchHint" style="font-size:8px;color:#2a5a3a;margin-top:5px;line-height:1.4;"></div>
+        </div>
+        <div class="sec-title">🛡️ AIR DEFENSE SYSTEMS (MOBILE)</div>
+        <div class="defense-cards" id="defenseCards"></div>
+        <button class="btn-add" id="addLauncherBtn">➕ ADD LAUNCHER (klik peta)</button>
+        <button class="btn-add" id="addDefenseBtn" style="margin-top:5px;">➕ ADD DEFENSE (klik peta)</button>
+        <button class="btn-map-mode" id="toggleMapModeBtn">🌓 MODE PETA (Dark/Light)</button>
+        <button class="btn-reset" style="border-color:#664422;color:#aa6644;margin-top:5px;" onclick="clearAllLauncherTargets()">🗑️ HAPUS SEMUA TARGET</button>
+        <button class="btn-reset" onclick="resetMission()">⬛ ABORT ALL & RESET</button>
+        <div id="telemetry">> BALLISTIC STRIKE 2026 Rev32 DESKTOP\n> Klik peta untuk place unit / set target.\n> Klik marker untuk kontrol (rute, gerak, launch, hapus).\n> Keyboard: L=Launcher D=Defense R=Reset M=MapMode</div>
+        </div><!-- /sidebar-inner -->
+    </div><!-- /sidebar -->
+    <div id="map-wrap">
+        <div id="map"></div>
+    </div>
+</div><!-- /main-area -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  MISSILE CATALOG (sama dengan Rev23)
+// ═══════════════════════════════════════════════════════════════
+const MISSILE_CATALOG = {
+    SCUD_D:{id:'SCUD_D',category:'SRBM',name:'Scud-D (R-17M)',origin:'🇷🇺 Russia/Export',threat:'LOW',emoji:'🚀',thrust:180000,isp:260,fuel:8500,dryMass:4500,kickAlt:500,stageSep:35,diam:0.88,dragRef:0.35,defaultPitch:45,maxRange:'700km',maxMach:'Mach 3.5',vulnerableTo:['IRON_DOME','PATRIOT','DAVIDS_SLING','S400','PANTSIR'],allowDepressed:true,info:'Soviet-era ballistic missile widely exported.',tactics:'Salvo to overwhelm defenses.',ammo:4},
+    FATEH_110:{id:'FATEH_110',category:'SRBM',name:'Fateh-110 / Zolfaghar',origin:'🇮🇷 Iran',threat:'LOW',emoji:'🚀',thrust:200000,isp:265,fuel:8200,dryMass:4200,kickAlt:400,stageSep:32,diam:0.61,dragRef:0.32,defaultPitch:45,maxRange:'700km',maxMach:'Mach 3.5',vulnerableTo:['IRON_DOME','PATRIOT','DAVIDS_SLING','S400','PANTSIR'],allowDepressed:true,info:'Iranian solid-fuel SRBM.',tactics:'High accuracy.',ammo:6},
+    ISKANDER_M:{id:'ISKANDER_M',category:'SRBM',name:'Iskander-M (9M723)',origin:'🇷🇺 Russia',threat:'MEDIUM',emoji:'🚀',thrust:240000,isp:275,fuel:6500,dryMass:4000,kickAlt:300,stageSep:28,diam:0.92,dragRef:0.28,defaultPitch:45,maxRange:'500km',maxMach:'Mach 6',vulnerableTo:['PATRIOT','DAVIDS_SLING','S400','THAAD'],allowDepressed:true,info:'Russia\'s precision SRBM.',tactics:'Maneuvering reentry.',ammo:4},
+    HWASONG_12:{id:'HWASONG_12',category:'MRBM',name:'Hwasong-12 (KN-17)',origin:'🇰🇵 North Korea',threat:'MEDIUM',emoji:'🎯',thrust:380000,isp:272,fuel:28000,dryMass:6500,kickAlt:800,stageSep:60,diam:1.5,dragRef:0.28,defaultPitch:45,maxRange:'4500km',maxMach:'Mach 7',vulnerableTo:['PATRIOT','THAAD','ARROW2','SM3','S400'],allowDepressed:true,info:'DPRK MRBM.',tactics:'Lofted trajectory.',ammo:3},
+    SHAHAB_3:{id:'SHAHAB_3',category:'MRBM',name:'Shahab-3 / Emad',origin:'🇮🇷 Iran',threat:'MEDIUM',emoji:'🎯',thrust:350000,isp:268,fuel:18000,dryMass:5800,kickAlt:700,stageSep:55,diam:1.25,dragRef:0.30,defaultPitch:45,maxRange:'2000km',maxMach:'Mach 7',vulnerableTo:['PATRIOT','THAAD','ARROW2','SM3','S400'],allowDepressed:false,info:'Iranian MRBM.',tactics:'Used in April 2024 attack.',ammo:3},
+    DF_21D:{id:'DF_21D',category:'MRBM',name:'DF-21D (ASBM)',origin:'🇨🇳 China',threat:'HIGH',emoji:'🎯',thrust:420000,isp:280,fuel:16000,dryMass:5500,kickAlt:900,stageSep:58,diam:1.4,dragRef:0.26,defaultPitch:45,maxRange:'1800km',maxMach:'Mach 10',vulnerableTo:['THAAD','ARROW2','SM3','S400'],allowDepressed:false,info:'Carrier killer.',tactics:'Maneuvering terminal.',ammo:2},
+    HWASONG_14:{id:'HWASONG_14',category:'LRBM',name:'Hwasong-14 (LRBM)',origin:'🇰🇵 North Korea',threat:'HIGH',emoji:'🌏',thrust:700000,isp:285,fuel:55000,dryMass:18000,kickAlt:1200,stageSep:75,diam:1.7,dragRef:0.24,defaultPitch:45,maxRange:'10000km',maxMach:'Mach 14',vulnerableTo:['THAAD','ARROW3','SM3','GBI','S500'],allowDepressed:false,info:'DPRK ICBM-class.',tactics:'High apogee.',ammo:2},
+    DF_4:{id:'DF_4',category:'LRBM',name:'DF-4 (CSS-3)',origin:'🇨🇳 China',threat:'HIGH',emoji:'🌏',thrust:680000,isp:280,fuel:42000,dryMass:15000,kickAlt:1100,stageSep:70,diam:2.25,dragRef:0.25,defaultPitch:45,maxRange:'7000km',maxMach:'Mach 13',vulnerableTo:['THAAD','ARROW3','SM3','GBI','S500'],allowDepressed:false,info:'Chinese LRBM.',tactics:'Liquid fuel.',ammo:2},
+    HWASONG_17:{id:'HWASONG_17',category:'ICBM',name:'Hwasong-17 (Monster ICBM)',origin:'🇰🇵 North Korea',threat:'EXTREME',emoji:'🌍',thrust:1200000,isp:295,fuel:80000,dryMass:30000,kickAlt:1500,stageSep:85,diam:2.4,dragRef:0.22,defaultPitch:45,maxRange:'15000km',maxMach:'Mach 22',vulnerableTo:['GBI','ARROW3','S500'],allowDepressed:false,info:'Largest ICBM.',tactics:'MIRVs.',ammo:1},
+    MINUTEMAN_3:{id:'MINUTEMAN_3',category:'ICBM',name:'Minuteman III (LGM-30G)',origin:'🇺🇸 USA',threat:'EXTREME',emoji:'🌍',thrust:1100000,isp:300,fuel:68000,dryMass:26000,kickAlt:1400,stageSep:82,diam:1.68,dragRef:0.22,defaultPitch:45,maxRange:'13000km',maxMach:'Mach 23',vulnerableTo:['GBI','S500'],allowDepressed:false,info:'US ICBM.',tactics:'Exo-atmospheric intercept.',ammo:1},
+    RS_28:{id:'RS_28',category:'ICBM',name:'RS-28 Sarmat (Satan II)',origin:'🇷🇺 Russia',threat:'EXTREME',emoji:'🌍',thrust:1400000,isp:310,fuel:100000,dryMass:38000,kickAlt:1800,stageSep:92,diam:3.0,dragRef:0.20,defaultPitch:45,maxRange:'18000km',maxMach:'Mach 25',vulnerableTo:['GBI'],allowDepressed:false,info:'Super-heavy ICBM.',tactics:'South Pole trajectory.',ammo:1},
+    DF_17:{id:'DF_17',category:'HGV',name:'DF-17 (HGV)',origin:'🇨🇳 China',threat:'EXTREME',emoji:'⚡',thrust:900000,isp:295,fuel:22000,dryMass:12000,kickAlt:1200,stageSep:75,diam:1.8,dragRef:0.18,defaultPitch:45,maxRange:'2500km',maxMach:'Mach 15',vulnerableTo:['GLIDE_BREAKER','S500'],allowDepressed:false,isHGV:true,info:'Hypersonic glide vehicle.',tactics:'Skip-glide.',ammo:2},
+    AVANGARD:{id:'AVANGARD',category:'HGV',name:'Avangard (Yu-71)',origin:'🇷🇺 Russia',threat:'EXTREME',emoji:'⚡',thrust:1200000,isp:300,fuel:48000,dryMass:22000,kickAlt:1500,stageSep:80,diam:2.0,dragRef:0.16,defaultPitch:45,maxRange:'6000km',maxMach:'Mach 27',vulnerableTo:['S500'],allowDepressed:false,isHGV:true,info:'Hypersonic boost-glide.',tactics:'Plasma sheath.',ammo:2},
+    DARK_EAGLE:{id:'DARK_EAGLE',category:'HGV',name:'Dark Eagle (LRHW)',origin:'🇺🇸 USA',threat:'EXTREME',emoji:'⚡',thrust:950000,isp:290,fuel:24000,dryMass:13000,kickAlt:1100,stageSep:70,diam:1.5,dragRef:0.17,defaultPitch:45,maxRange:'2775km',maxMach:'Mach 17',vulnerableTo:['S500','GLIDE_BREAKER'],allowDepressed:false,isHGV:true,info:'US Army hypersonic.',tactics:'Low-altitude glide.',ammo:2},
+    ZIRCON:{id:'ZIRCON',category:'HGV',name:'3M22 Zircon (Tsirkon)',origin:'🇷🇺 Russia',threat:'HIGH',emoji:'⚡',thrust:600000,isp:280,fuel:10000,dryMass:7000,kickAlt:800,stageSep:60,diam:0.7,dragRef:0.20,defaultPitch:45,maxRange:'1000km',maxMach:'Mach 9',vulnerableTo:['SM3','S500','GLIDE_BREAKER'],allowDepressed:false,isHGV:true,info:'Hypersonic cruise.',tactics:'Sea-launched.',ammo:4},
+    KALIBR:{id:'KALIBR',category:'CRUISE',name:'Kalibr (3M-14)',origin:'🇷🇺 Russia',threat:'MEDIUM',emoji:'✈️',thrust:4000,isp:3000,fuel:400,dryMass:1500,kickAlt:100,stageSep:999,diam:0.533,dragRef:0.3,defaultPitch:45,maxRange:'2500km',maxMach:'Mach 0.8',vulnerableTo:['IRON_DOME','PATRIOT','DAVIDS_SLING','S400','PANTSIR','SAMP_T'],allowDepressed:false,isCruise:true,info:'Subsonic cruise missile.',tactics:'NOE altitude.',ammo:8},
+    TOMAHAWK:{id:'TOMAHAWK',category:'CRUISE',name:'BGM-109 Tomahawk (Block V)',origin:'🇺🇸 USA',threat:'MEDIUM',emoji:'✈️',thrust:3300,isp:3500,fuel:450,dryMass:1200,kickAlt:100,stageSep:999,diam:0.527,dragRef:0.28,defaultPitch:45,maxRange:'1850km',maxMach:'Mach 0.85',vulnerableTo:['IRON_DOME','PATRIOT','S400','PANTSIR','HQ9'],allowDepressed:false,isCruise:true,info:'US Navy cruise missile.',tactics:'Terrain-following.',ammo:8},
+    KH_101:{id:'KH_101',category:'CRUISE',name:'Kh-101 / Kh-102 (ALCM)',origin:'🇷🇺 Russia',threat:'HIGH',emoji:'✈️',thrust:3800,isp:3200,fuel:500,dryMass:2000,kickAlt:100,stageSep:999,diam:0.742,dragRef:0.32,defaultPitch:45,maxRange:'4500km',maxMach:'Mach 0.77',vulnerableTo:['PATRIOT','S400','PANTSIR','SAMP_T'],allowDepressed:false,isCruise:true,info:'Air-launched cruise missile.',tactics:'Stealth shaping.',ammo:6},
+    JASSM_ER:{id:'JASSM_ER',category:'CRUISE',name:'AGM-158B JASSM-ER',origin:'🇺🇸 USA',threat:'HIGH',emoji:'✈️',thrust:3500,isp:3200,fuel:420,dryMass:1000,kickAlt:100,stageSep:999,diam:0.45,dragRef:0.25,defaultPitch:45,maxRange:'980km',maxMach:'Mach 0.85',vulnerableTo:['PATRIOT','S400','PANTSIR','HQ9'],allowDepressed:false,isCruise:true,info:'Stealth cruise missile.',tactics:'Low RCS.',ammo:6},
+    TRIDENT_II:{id:'TRIDENT_II',category:'ICBM',name:'Trident II D5 (SLBM)',origin:'🇺🇸🇬🇧',threat:'EXTREME',emoji:'🌊',thrust:1100000,isp:308,fuel:60000,dryMass:24000,kickAlt:1600,stageSep:86,diam:2.11,dragRef:0.21,defaultPitch:45,maxRange:'12000km',maxMach:'Mach 24',vulnerableTo:['GBI'],allowDepressed:false,info:'SLBM.',tactics:'Submarine stealth.',ammo:1},
+    BULAVA:{id:'BULAVA',category:'ICBM',name:'RSM-56 Bulava (SLBM)',origin:'🇷🇺 Russia',threat:'EXTREME',emoji:'🌊',thrust:1000000,isp:302,fuel:52000,dryMass:22000,kickAlt:1500,stageSep:84,diam:2.0,dragRef:0.22,defaultPitch:45,maxRange:'10000km',maxMach:'Mach 22',vulnerableTo:['GBI'],allowDepressed:false,info:'Russian SLBM.',tactics:'Arctic launch.',ammo:1}
+};
+
+const DEFENSE_SYSTEMS = {
+    IRON_DOME:{id:'IRON_DOME',name:'Iron Dome (Tamir)',origin:'🇮🇱 Israel',tier:1,emoji:'🛡️',radarRange:70000,engagementRange:15000,minEngagementRange:500,interceptorSpeed:926,ammo:20,reloadTime:360,radarColor:'#3b82f6',trailColor:'#ffaa44',maxG:15,boostDuration:1.2,mass:150,dragCd:0.4,dragArea:0.08,maxTargetMach:5,minEngageAlt:0,maxEngageAlt:10000,requireDescending:false,baseSuccessRate:0.87,canIntercept:['SRBM','CRUISE'],info:'Battle-proven system.',weaknesses:'Overwhelmed by salvos.'},
+    PANTSIR:{id:'PANTSIR',name:'Pantsir-S1 (SA-22)',origin:'🇷🇺 Russia',tier:1,emoji:'🔫',radarRange:40000,engagementRange:20000,minEngagementRange:1000,interceptorSpeed:1000,ammo:12,reloadTime:360,radarColor:'#ef4444',trailColor:'#ff8866',maxG:18,boostDuration:1.2,mass:74,dragCd:0.35,dragArea:0.05,maxTargetMach:4,minEngageAlt:0,maxEngageAlt:12000,requireDescending:false,baseSuccessRate:0.72,canIntercept:['SRBM','CRUISE'],info:'Short-range gun/missile.',weaknesses:'Vulnerable stationary.'},
+    PHALANX:{id:'PHALANX',name:'Phalanx CIWS (Block 1B)',origin:'🇺🇸 USA (Naval)',tier:1,emoji:'⚙️',radarRange:5500,engagementRange:1800,minEngagementRange:500,interceptorSpeed:1100,ammo:20,reloadTime:360,radarColor:'#22aaff',trailColor:'#aaddff',maxG:20,boostDuration:1.0,mass:20,dragCd:0.5,dragArea:0.03,maxTargetMach:3,minEngageAlt:0,maxEngageAlt:3000,requireDescending:false,baseSuccessRate:0.75,canIntercept:['CRUISE'],info:'Naval CIWS.',weaknesses:'Very short range.'},
+    HQ_17:{id:'HQ_17',name:'HQ-17 (FK-1000)',origin:'🇨🇳 China',tier:1,emoji:'🛡️',radarRange:50000,engagementRange:15000,minEngagementRange:3000,interceptorSpeed:850,ammo:18,reloadTime:360,radarColor:'#ff4422',trailColor:'#ffcc44',maxG:14,boostDuration:1.5,mass:120,dragCd:0.4,dragArea:0.07,maxTargetMach:4,minEngageAlt:0,maxEngageAlt:12000,requireDescending:false,baseSuccessRate:0.75,canIntercept:['SRBM','CRUISE'],info:'China\'s Iron Dome.',weaknesses:'Untested.'},
+    DAVIDS_SLING:{id:'DAVIDS_SLING',name:"David's Sling (Stunner)",origin:'🇮🇱🇺🇸 Israel/USA',tier:2,emoji:'🎯',radarRange:300000,engagementRange:70000,minEngagementRange:1000,interceptorSpeed:2200,ammo:16,reloadTime:360,radarColor:'#0066ff',trailColor:'#44aaff',maxG:20,boostDuration:1.5,mass:200,dragCd:0.3,dragArea:0.10,maxTargetMach:9,minEngageAlt:1000,maxEngageAlt:50000,requireDescending:true,baseSuccessRate:0.80,canIntercept:['SRBM','MRBM','CRUISE'],info:'Medium-range defense.',weaknesses:'Cannot handle LRBM.'},
+    PATRIOT:{id:'PATRIOT',name:'Patriot PAC-3 MSE',origin:'🇺🇸🇩🇪🇯🇵 US/Allies',tier:2,emoji:'🎯',radarRange:300000,engagementRange:60000,minEngagementRange:3000,interceptorSpeed:1700,ammo:12,reloadTime:360,radarColor:'#ef4444',trailColor:'#ff8866',maxG:25,boostDuration:1.8,mass:300,dragCd:0.35,dragArea:0.12,maxTargetMach:8,minEngageAlt:1000,maxEngageAlt:40000,requireDescending:true,baseSuccessRate:0.80,canIntercept:['SRBM','MRBM','CRUISE'],info:'Theater missile defense.',weaknesses:'Limited ammo.'},
+    SAMP_T:{id:'SAMP_T',name:'SAMP/T Aster-30 (Mamba)',origin:'🇫🇷🇮🇹 France/Italy',tier:2,emoji:'🎯',radarRange:250000,engagementRange:60000,minEngagementRange:3000,interceptorSpeed:1400,ammo:16,reloadTime:360,radarColor:'#4466ff',trailColor:'#88aaff',maxG:22,boostDuration:1.8,mass:280,dragCd:0.32,dragArea:0.11,maxTargetMach:8,minEngageAlt:1000,maxEngageAlt:35000,requireDescending:true,baseSuccessRate:0.76,canIntercept:['SRBM','MRBM','CRUISE'],info:'Franco-Italian system.',weaknesses:'Slightly less capable.'},
+    HQ_9:{id:'HQ_9',name:'HQ-9B (FD-2000)',origin:'🇨🇳 China',tier:2,emoji:'🎯',radarRange:250000,engagementRange:100000,minEngagementRange:6000,interceptorSpeed:1600,ammo:16,reloadTime:360,radarColor:'#ff6622',trailColor:'#ffaa66',maxG:20,boostDuration:1.8,mass:330,dragCd:0.33,dragArea:0.13,maxTargetMach:8,minEngageAlt:500,maxEngageAlt:40000,requireDescending:true,baseSuccessRate:0.72,canIntercept:['SRBM','MRBM','CRUISE'],info:'Chinese S-300 equivalent.',weaknesses:'Unproven.'},
+    S400:{id:'S400',name:'S-400 Triumf (SA-21)',origin:'🇷🇺 Russia',tier:2,emoji:'🎯',radarRange:600000,engagementRange:120000,minEngagementRange:2000,interceptorSpeed:2000,ammo:16,reloadTime:360,radarColor:'#ff4466',trailColor:'#ff8899',maxG:25,boostDuration:1.8,mass:380,dragCd:0.30,dragArea:0.14,maxTargetMach:9,minEngageAlt:10,maxEngageAlt:60000,requireDescending:false,baseSuccessRate:0.74,canIntercept:['SRBM','MRBM','CRUISE'],info:'Russian flagship SAM.',weaknesses:'Cannot engage HGV.'},
+    THAAD:{id:'THAAD',name:'THAAD (Terminal High Altitude)',origin:'🇺🇸🇸🇦🇦🇪 USA/Allies',tier:3,emoji:'🌌',radarRange:900000,engagementRange:200000,minEngagementRange:20000,interceptorSpeed:2800,ammo:8,reloadTime:360,radarColor:'#a855f7',trailColor:'#ff44ff',maxG:20,boostDuration:2.5,mass:500,dragCd:0.3,dragArea:0.15,maxTargetMach:14,minEngageAlt:40000,maxEngageAlt:150000,requireDescending:true,baseSuccessRate:0.76,canIntercept:['MRBM','LRBM'],info:'Upper-tier terminal defense.',weaknesses:'Only 8 rounds.'},
+    ARROW_2:{id:'ARROW_2',name:'Arrow-2 (Hetz-2)',origin:'🇮🇱🇺🇸 Israel/USA',tier:3,emoji:'🌌',radarRange:500000,engagementRange:150000,minEngagementRange:10000,interceptorSpeed:2300,ammo:10,reloadTime:360,radarColor:'#0088ff',trailColor:'#44ccff',maxG:22,boostDuration:2.0,mass:420,dragCd:0.32,dragArea:0.13,maxTargetMach:12,minEngageAlt:10000,maxEngageAlt:60000,requireDescending:true,baseSuccessRate:0.76,canIntercept:['MRBM','LRBM'],info:'Endo-atmospheric interceptor.',weaknesses:'Cannot engage ICBM.'},
+    ARROW_3:{id:'ARROW_3',name:'Arrow-3 (Hetz-3)',origin:'🇮🇱🇺🇸 Israel/USA',tier:3,emoji:'🌌',radarRange:800000,engagementRange:500000,minEngagementRange:50000,interceptorSpeed:3000,ammo:8,reloadTime:360,radarColor:'#0044ff',trailColor:'#4488ff',maxG:18,boostDuration:3.0,mass:600,dragCd:0.28,dragArea:0.15,maxTargetMach:20,minEngageAlt:80000,maxEngageAlt:500000,requireDescending:false,baseSuccessRate:0.65,canIntercept:['LRBM','ICBM'],info:'Exo-atmospheric interceptor.',weaknesses:'Cannot engage HGV.'},
+    SM3:{id:'SM3',name:'SM-3 Block IIA (Aegis BMD)',origin:'🇺🇸🇯🇵 USA/Japan',tier:3,emoji:'⚓',radarRange:800000,engagementRange:700000,minEngagementRange:30000,interceptorSpeed:3500,ammo:10,reloadTime:360,radarColor:'#4488ff',trailColor:'#88ccff',maxG:20,boostDuration:3.0,mass:700,dragCd:0.28,dragArea:0.16,maxTargetMach:18,minEngageAlt:70000,maxEngageAlt:500000,requireDescending:false,baseSuccessRate:0.68,canIntercept:['MRBM','LRBM','ICBM'],info:'Sea-based BMD.',weaknesses:'Cannot engage HGV.'},
+    GBI:{id:'GBI',name:'GBI / GMD (Ground-Based Interceptor)',origin:'🇺🇸 USA',tier:3,emoji:'🏔️',radarRange:5000000,engagementRange:5000000,minEngagementRange:200000,interceptorSpeed:8000,ammo:6,reloadTime:360,radarColor:'#ff4400',trailColor:'#ff8800',maxG:15,boostDuration:4.0,mass:900,dragCd:0.25,dragArea:0.18,maxTargetMach:25,minEngageAlt:200000,maxEngageAlt:2000000,requireDescending:false,baseSuccessRate:0.55,canIntercept:['LRBM','ICBM'],info:'US homeland defense.',weaknesses:'Only 44 total.'},
+    S500:{id:'S500',name:'S-500 Prometey (55R6M)',origin:'🇷🇺 Russia',tier:4,emoji:'🌠',radarRange:800000,engagementRange:500000,minEngagementRange:5000,interceptorSpeed:4200,ammo:8,reloadTime:360,radarColor:'#ff00aa',trailColor:'#ff44ee',maxG:20,boostDuration:3.0,mass:800,dragCd:0.26,dragArea:0.17,maxTargetMach:25,minEngageAlt:500,maxEngageAlt:600000,requireDescending:false,baseSuccessRate:0.58,canIntercept:['MRBM','LRBM','ICBM','HGV'],info:'Russia\'s newest system.',weaknesses:'Limited rounds.'},
+    GLIDE_BREAKER:{id:'GLIDE_BREAKER',name:'Glide Breaker (MDA)',origin:'🇺🇸 USA (Development)',tier:4,emoji:'⚡',radarRange:400000,engagementRange:300000,minEngagementRange:10000,interceptorSpeed:5000,ammo:6,reloadTime:360,radarColor:'#44ffaa',trailColor:'#88ffcc',maxG:30,boostDuration:2.5,mass:400,dragCd:0.22,dragArea:0.12,maxTargetMach:25,minEngageAlt:15000,maxEngageAlt:100000,requireDescending:false,baseSuccessRate:0.45,canIntercept:['HGV'],info:'HGV interceptor.',weaknesses:'Still development.'},
+    ARROW_4:{id:'ARROW_4',name:'Arrow-4 (Next-Gen)',origin:'🇮🇱🇺🇸 Israel/USA',tier:4,emoji:'🚀',radarRange:500000,engagementRange:400000,minEngagementRange:30000,interceptorSpeed:4500,ammo:6,reloadTime:360,radarColor:'#00ccff',trailColor:'#44eeff',maxG:25,boostDuration:3.0,mass:550,dragCd:0.24,dragArea:0.14,maxTargetMach:22,minEngageAlt:20000,maxEngageAlt:400000,requireDescending:false,baseSuccessRate:0.50,canIntercept:['ICBM','HGV'],info:'Next-gen interceptor.',weaknesses:'Not operational 2026.'}
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  CONSTANTS & GLOBALS
+// ═══════════════════════════════════════════════════════════════
+const EARTH_R = 6371000, G0 = 9.80665, SPEED_OF_SOUND = 340.29;
+let map, targetPos = null, targetMarker = null;
+let activeMissiles = [], activeInterceptors = [], defenseBatteries = [];
+let impactMarkers = [], historyMarkers = [];
+let waitingForNewTarget = false, missileCounter = 0, interceptorCounter = 0;
+let selectedMissileId = 'SCUD_D';
+let selectedDefenseId = 'IRON_DOME';
+let launcherUnits = [];
+let defenseUnits = [];
+let addUnitMode = null;
+let routePickingForUnit = null;
+let setTargetForUnitId = null; // ID of launcher waiting for target click
+
+// Map mode toggle
+let currentTileLayer = null;
+let isDarkMode = true;
+function initTileLayer() {
+    if (currentTileLayer) map.removeLayer(currentTileLayer);
+    const tileUrl = isDarkMode ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+    currentTileLayer = L.tileLayer(tileUrl, { attribution: '&copy; OSM & CARTO', maxZoom: 18, updateWhenZooming: false, keepBuffer: 2 }).addTo(map);
+}
+function toggleMapMode() { isDarkMode = !isDarkMode; initTileLayer(); logMessage(`🌓 Peta mode: ${isDarkMode ? 'Dark' : 'Light'}`); }
+
+// ═══════════════════════════════════════════════════════════════
+//  HELPER FUNCTIONS (global)
+// ═══════════════════════════════════════════════════════════════
+function updateCounters() { 
+    document.getElementById('activeMissileCount').innerText = activeMissiles.length; 
+    document.getElementById('activeDefenseCount').innerText = defenseBatteries.length; 
+    document.getElementById('hudLauncherCount').innerText = launcherUnits.length;
+    document.getElementById('hudDefenseCount').innerText = defenseUnits.length;
+}
+function updateStatus(s, flying) { const el = document.getElementById('hudStatus'); el.textContent = s; el.className = 'hud-status' + (flying ? ' flying' : ' armed'); }
+function logMessage(msg) { const t = document.getElementById('telemetry'); t.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + t.innerText; if (t.innerText.split('\n').length > 50) t.innerText = t.innerText.split('\n').slice(0, 45).join('\n'); }
+function calculateAzimuth(base, target) { let dLon = (target[1] - base[1]) * Math.PI / 180; let lat1 = base[0] * Math.PI / 180, lat2 = target[0] * Math.PI / 180; let y = Math.sin(dLon) * Math.cos(lat2); let x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon); let azi = Math.atan2(y, x) * 180 / Math.PI; if (azi < 0) azi += 360; return azi; }
+function calcOptimalPitch(distKm, missileId) {
+    // Realistic pitch model per missile category.
+    // Real ballistic missiles don't follow ideal vacuum parabola.
+    // Pitch here = initial launch elevation angle (controls apogee height & range).
+    //
+    // Category-based optimal pitch (drag-corrected):
+    //   SRBM  (≤1500km): 40–55° — short range, significant drag, needs more elevation
+    //   MRBM  (≤5000km): 35–50° — medium range
+    //   LRBM  (≤10000km): 30–45° — longer burnout compensates drag
+    //   ICBM  (>10000km): 25–40° — long powered phase, gravity turn dominates
+    //   HGV              : 20–30° — shallow launch into glide phase
+    const m = MISSILE_CATALOG[missileId];
+    if (!m || m.isCruise) return 45;
+    const maxRangeKm = parseFloat(m.maxRange) || 1000;
+    // ratio 0..1: how far along the missile's max range the target is
+    const ratio = Math.min(0.97, Math.max(0.01, distKm / maxRangeKm));
+    let minPitch, maxPitch;
+    if (m.isHGV) {
+        // HGV: shallow launch, glide phase takes over
+        minPitch = 18; maxPitch = 32;
+    } else if (m.category === 'ICBM') {
+        // ICBM: long gravity turn, lower launch pitch
+        minPitch = 22; maxPitch = 42;
+    } else if (m.category === 'LRBM') {
+        minPitch = 28; maxPitch = 48;
+    } else if (m.category === 'MRBM') {
+        minPitch = 34; maxPitch = 54;
+    } else {
+        // SRBM: needs more elevation, shorter range, significant drag
+        minPitch = 38; maxPitch = 62;
+    }
+    // At short range (low ratio): higher pitch needed to arc without overshooting
+    // At max range (ratio→1): pitch closer to 45° for max range efficiency
+    // Parabola-like: peak at ratio≈0.5, then tapers
+    // Simple: pitch = maxPitch - (maxPitch - minPitch) * |ratio - 0.5| / 0.5  ... not quite
+    // Better: at ratio=0.5, use ~45-50°; taper down toward max range, taper up at short range
+    const midRatio = 0.5;
+    const spread = Math.abs(ratio - midRatio) / midRatio; // 0 at ratio=0.5, 1 at extremes
+    const basePitch = (minPitch + maxPitch) / 2;
+    // Near max range: reduce pitch (flatter trajectory for range)
+    // At very short range: increase pitch (loft over defenses)
+    const offset = ratio > midRatio
+        ? -(maxPitch - basePitch) * ((ratio - midRatio) / midRatio)   // flatten toward max range
+        : +(maxPitch - basePitch) * ((midRatio - ratio) / midRatio);  // loft at short range
+    const pitch = Math.max(minPitch, Math.min(maxPitch, basePitch + offset));
+    return Math.round(pitch * 10) / 10;
+}
+let autoPitchSuggestions = { standard: 45, lofted: 70, depressed: 28 };
+function updateAutoPitchPanel(distKm, launcherId) {
+    // Cari launcher yang relevan — jika ada launcherId gunakan itu,
+    // jika tidak cari siaga launcher pertama yang punya target
+    let siagaLauncher = launcherId
+        ? findUnitById(launcherId)
+        : launcherUnits.find(u => u.state === 'siaga' && u.pos && u.targetPos);
+    if (!siagaLauncher) return;
+    // Gunakan missile type dari launcher tersebut (bukan selectedMissileId global)
+    const missileId = siagaLauncher.missileId || selectedMissileId;
+    const m = MISSILE_CATALOG[missileId];
+    if (!m) return;
+    const panel = document.getElementById('autoPitchPanel');
+    const rangeDisplay = document.getElementById('rangeDisplay');
+    const pitchHint = document.getElementById('pitchHint');
+
+    // ── Cruise missile: pitch AKTIF — mengontrol cruise altitude ──
+    if (m.isCruise) {
+        panel.style.display = 'block';
+        const maxRangeKm = parseFloat(m.maxRange) || 2500;
+        const inRange = distKm <= maxRangeKm;
+        const rangeColor = inRange ? '#44aa66' : '#ff4444';
+        rangeDisplay.innerHTML = `<span style="color:${rangeColor};">📍 Distance: <b>${distKm.toFixed(0)} km</b></span>&nbsp;|&nbsp; Max range: <b>${maxRangeKm} km</b>&nbsp;|&nbsp; <span style="color:${rangeColor};">${inRange ? '✓ IN RANGE' : '⚠️ EXCEEDS RANGE'}</span>`;
+        // Cruise altitude presets
+        const cruiseLow   = 15;   // NOE stealth pitch → ~50m
+        const cruiseMid   = 30;   // medium altitude pitch → ~300m
+        const cruiseHigh  = 55;   // pop-up style → ~800m (easier intercept)
+        autoPitchSuggestions = { standard: cruiseMid, lofted: cruiseHigh, depressed: cruiseLow };
+        // Show trajectory buttons with cruise-specific labels
+        const btns = panel.querySelectorAll('button');
+        btns.forEach(b => b.style.display = '');
+        // Rename buttons for cruise context
+        const [btnStd, btnLoft, btnDep] = btns;
+        if(btnStd)  btnStd.innerHTML  = `🎯 MEDIUM<br><span style="font-size:7px;color:#2a6a8a;">Pitch ${cruiseMid}° · ~300m alt</span>`;
+        if(btnLoft) btnLoft.innerHTML = `📈 HIGH ARC<br><span style="font-size:7px;color:#2a6a8a;">Pitch ${cruiseHigh}° · Easy intercept</span>`;
+        if(btnDep)  btnDep.innerHTML  = `🕵️ NOE STEALTH<br><span style="font-size:7px;color:#2a6a8a;">Pitch ${cruiseLow}° · ~50m, hard to detect</span>`;
+        pitchHint.innerHTML = `<span style="color:#44ccff;">✈️ CRUISE — Pitch mengontrol ketinggian terbang.</span><br>
+<span style="font-size:7.5px;color:#4a6a7a;">
+🕵️ <b>NOE (pitch 5-20°):</b> terbang 30-150m, radar sangat sulit mendeteksi. Paling sulit diintercept.<br>
+🎯 <b>MEDIUM (pitch 21-45°):</b> terbang 150-500m, deteksi sedang, keseimbangan range vs stealth.<br>
+📈 <b>HIGH ARC (pitch 46-88°):</b> terbang 500m+, mudah dideteksi & diintercept tapi jangkauan lebih jauh.<br>
+Phase penerbangan: <b>CLIMB → CRUISE (altitude sesuai pitch) → TERMINAL dive.</b>
+</span>`;
+        document.getElementById('pitchModeLabel').textContent = 'CRUISE-ALT';
+        return;
+    }
+
+    // ── Ballistic missiles — restore original button labels ──
+    const btns = panel.querySelectorAll('button');
+    btns.forEach(b => b.style.display = '');
+    const [btnStd, btnLoft, btnDep] = btns;
+    if(btnStd)  btnStd.innerHTML  = `🎯 STANDARD<br><span style="font-size:7px;color:#2a6a8a;">Pitch optimal · Max Range</span>`;
+    if(btnLoft) btnLoft.innerHTML = `📐 LOFTED<br><span style="font-size:7px;color:#2a6a8a;">High arc · Slow descent</span>`;
+    if(btnDep)  btnDep.innerHTML  = `📉 DEPRESSED<br><span style="font-size:7px;color:#2a6a8a;">Low arc · Hard to intercept</span>`;
+
+    panel.style.display = 'block';
+    const maxRangeKm = parseFloat(m.maxRange) || 1000;
+    const stdPitch = calcOptimalPitch(distKm, missileId);
+
+    // Lofted: +15 to +30° above standard (more for SRBM, less for ICBM)
+    // Real lofted trajectories go much higher, reducing horizontal speed
+    const loftOffset = m.category === 'ICBM' ? 12 : m.category === 'LRBM' ? 15 : m.category === 'MRBM' ? 18 : 22;
+    const loftedPitch = Math.min(85, stdPitch + loftOffset);
+
+    // Depressed: -12 to -20° below standard, floor at 15° (can't go below)
+    // Real depressed trajectories fly flat, short intercept window for defender
+    const depressOffset = m.category === 'ICBM' ? 8 : m.category === 'LRBM' ? 10 : m.category === 'MRBM' ? 12 : 15;
+    const depressedPitch = Math.max(15, stdPitch - depressOffset);
+
+    autoPitchSuggestions = { standard: stdPitch, lofted: loftedPitch, depressed: depressedPitch };
+    const inRange = distKm <= maxRangeKm;
+    const rangeColor = inRange ? '#44aa66' : '#ff4444';
+    rangeDisplay.innerHTML = `<span style="color:${rangeColor};">📍 Distance: <b>${distKm.toFixed(0)} km</b></span>&nbsp;|&nbsp; Max range: <b>${maxRangeKm} km</b>&nbsp;|&nbsp; <span style="color:${rangeColor};">${inRange ? '✓ IN RANGE' : '⚠️ EXCEEDS RANGE'}</span>`;
+    if (!inRange) {
+        pitchHint.innerHTML = `⚠️ <span style="color:#ff4444;">Target ${(distKm-maxRangeKm).toFixed(0)}km beyond max range of ${m.name}. Pilih target lebih dekat atau missile jarak lebih jauh.</span>`;
+        return;
+    }
+
+    // Category-specific trajectory descriptions
+    const catDesc = {
+        SRBM: `SRBM terbang parabola pendek. Standard ${stdPitch.toFixed(0)}° → Apogee ~150km. Lofted ${loftedPitch.toFixed(0)}° → Apogee tinggi, descent vertikal, intercept window pendek. Depressed ${depressedPitch.toFixed(0)}° → Flat arc, kecepatan horizontal tinggi, radar warning time singkat.`,
+        MRBM: `MRBM parabola menengah. Standard ${stdPitch.toFixed(0)}° → Apogee ~400-800km. Lofted ${loftedPitch.toFixed(0)}° → Apogee tinggi (luar atmosfer), butuh exo-atm interceptor. Depressed ${depressedPitch.toFixed(0)}° → Flat trajectory, Mach tinggi di terminal.`,
+        LRBM: `LRBM sub-orbital. Standard ${stdPitch.toFixed(0)}° → exo-atmospheric coast. Lofted ${loftedPitch.toFixed(0)}° → sangat tinggi, hanya GBI/Arrow-3 bisa intersep. Depressed ${depressedPitch.toFixed(0)}° → tidak disarankan (range berkurang signifikan).`,
+        ICBM: `ICBM: pitch dikendalikan gravity turn setelah burnout. Standard ${stdPitch.toFixed(0)}° → standard ICBM trajectory. Lofted ${loftedPitch.toFixed(0)}° → polar trajectory. Depressed tidak tersedia untuk ICBM.`,
+        HGV: `HGV: pitch awal menentukan ketinggian glide. Standard ${stdPitch.toFixed(0)}° → optimal glide. Lower pitch → lower glide altitude → harder to intercept.`
+    };
+    const desc = catDesc[m.category] || `Standard ${stdPitch.toFixed(0)}° optimal untuk jarak ini.`;
+    pitchHint.innerHTML = `<span style="color:#44aa88;">✓ Semua trajektori viable.</span><br><span style="font-size:7.5px;color:#4a6a7a;">${desc}</span>`;
+    //document.getElementById('pitch').value = stdPitch.toFixed(1);
+    document.getElementById('pitchModeLabel').textContent = 'AUTO';
+}
+function applyAutoPitch(mode) {
+    const m = MISSILE_CATALOG[selectedMissileId];
+    const p = autoPitchSuggestions[mode] || 45;
+    document.getElementById('pitch').value = p.toFixed(1);
+    document.getElementById('pitchModeLabel').textContent = mode.toUpperCase();
+    const descriptions = {
+        standard: `Standard ${p.toFixed(0)}° — lintasan parabola optimal untuk jarak ini`,
+        lofted:   `Lofted ${p.toFixed(0)}° — arc tinggi, apogee lebih tinggi, intercept window sempit. Butuh exo-atmospheric interceptor.`,
+        depressed:`Depressed ${p.toFixed(0)}° — arc rendah, kecepatan horizontal tinggi, radar warning time singkat. Sulit diintercept terminal.`
+    };
+    logMessage(`📐 ${descriptions[mode] || mode + ' ' + p.toFixed(0) + '° applied'}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MOBILE UNIT CLASS (sama persis seperti Rev24, tidak diubah)
+// ═══════════════════════════════════════════════════════════════
+// Truck name mapping per missile type
+const LAUNCHER_TRUCK_NAMES = {
+    SCUD_D:'TEL Scud-D',FATEH_110:'TEL Fateh-110',ISKANDER_M:'9P78-1 Iskander',
+    HWASONG_12:'MAZ-547 Hwasong',SHAHAB_3:'TEL Shahab-3',DF_21D:'DF-21D TEL',
+    HWASONG_14:'MAZ-7910 ICBM',DF_4:'DF-4 Silo TEL',HWASONG_17:'11-Axle TEL',
+    MINUTEMAN_3:'MM-III Silo',RS_28:'RS-28 TEL',DF_17:'DF-17 HGV TEL',
+    AVANGARD:'RS-28 Launcher',DARK_EAGLE:'LRHW Launcher',ZIRCON:'Ship Launcher',
+    KALIBR:'Kalibr SLCM',TOMAHAWK:'MK-41 VLS',KH_101:'Tu-160 ALCM',
+    JASSM_ER:'F-15 Strike',TRIDENT_II:'Ohio SSBN',BULAVA:'Borei SSBN'
+};
+// Truck icon mapping per missile type (reuse truckfatahI as default launcher)
+const LAUNCHER_TRUCK_IMGS = {
+    FATEH_110:'./icons/truck/truckfatahI.png',
+    SCUD_D:'./icons/truck/truckfatahI.png',
+    ISKANDER_M:'./icons/truck/truckfatahI.png',
+};
+
+class MobileUnit {
+    constructor(type, lat, lng, mapInstance) {
+        this.type = type;
+        this.map = mapInstance;
+
+        if (type === 'launcher') {
+            // ── Launcher: identity locked to current selected missile ──
+            this.missileId  = selectedMissileId;
+            const m = MISSILE_CATALOG[selectedMissileId];
+            this.missileName = m.name;
+            this.missileEmoji= m.emoji;
+            this.missileCategory = m.category;
+            this.truckName   = LAUNCHER_TRUCK_NAMES[selectedMissileId] || `${m.name} TEL`;
+            this.id = `L_${m.category}_${Date.now().toString(36).slice(-4)}`;
+            this.maxAmmo = m.ammo;
+            this.ammo    = this.maxAmmo;
+            this.reloading = false; this.reloadEndTime = 0;
+            this.imgFile = LAUNCHER_TRUCK_IMGS[selectedMissileId] || './icons/truck/truckfatahI.png';
+            this.glowColors = { idle:'#4a6a7a', ready:'#44cc44', moving:'#88ff44', standby:'#4488cc', siaga:'#ff4422' };
+        } else {
+            // ── Defense: identity locked to current selected defense system ──
+            this.defenseId   = selectedDefenseId;
+            const d = DEFENSE_SYSTEMS[selectedDefenseId];
+            this.defenseName  = d.name;
+            this.defenseEmoji = d.emoji;
+            this.truckName    = d.name;
+            this.id = `D_${selectedDefenseId.slice(0,4)}_${Date.now().toString(36).slice(-4)}`;
+            this.maxAmmo = d.ammo;
+            this.ammo    = this.maxAmmo;
+            this.reloading = false; this.reloadEndTime = 0;
+            this.imgFile = null;
+            this.glowColors = { idle:'#4a6a7a', ready:'#44cc44', moving:'#88ff44', standby:'#4488cc', siaga:'#00ff88' };
+        }
+
+        this.state = 'idle';
+        this.pos = [lat, lng];
+        this.routeCoords = []; this.routeIdx = 0;
+        this.routeLine = null; this.animId = null;
+        this.travelledDist = 0; this.lastT = 0;
+        this.speedKph = 60; this.simMult = 1;
+        this.marker = null;
+        this.resolvedBattery = null;
+        this.targetPos = null; // per-launcher independent target
+        this.lastLaunchTime = 0; // cooldown tracker (launcher only)
+        this.LAUNCH_COOLDOWN = 30000; // 30 detik cooldown antar peluncuran
+        // ── SISTEM BBM (Point 2) ──
+        if (type === 'launcher') {
+            this.fuelCapacity = 200; // liter
+            this.fuel_liters = 200;  // liter saat ini
+            this.fuelPerKm = 0.8;    // liter per km
+        }
+        this.createMarker();
+        this.updatePopup();
+    }
+    createMarker() {
+        const glow = this.glowColors[this.state] || '#888';
+        const dotClass = `t-dot-${this.state}`;
+        const imgSrc = this.type === 'defense' ? getDefenseTruckImg(selectedDefenseId) : this.imgFile;
+        const imgHtml = imgSrc ? `<img src="${imgSrc}" width="42" height="42" style="display:block;border-radius:4px;filter:drop-shadow(0 0 5px ${glow});" onerror="this.parentElement.querySelector('.truck-emoji-fb').style.display='flex';this.style.display='none';">` : '';
+        const emoji = this.type === 'defense' ? (DEFENSE_SYSTEMS[selectedDefenseId]?.emoji || '🛡️') : '🚛';
+        const iconHtml = `<div class="truck-wrap"><div class="t-dot ${dotClass}"></div>${imgHtml}<div class="truck-emoji-fb" style="display:${imgSrc ? 'none' : 'flex'};background:${glow}22;border-color:${glow};">${emoji}</div></div>`;
+        const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [46, 50], iconAnchor: [23, 46] });
+        this.marker = L.marker(this.pos, { icon, zIndexOffset: 700, interactive: true }).addTo(this.map);
+        const openFn = (e) => { L.DomEvent.stopPropagation(e); this.showPopup(); };
+        this.marker.on('click', openFn);
+        this.marker.on('touchend', openFn);
+        const tooltipFn = () => this.type === 'launcher'
+            ? `🚛 ${this.truckName}\n${this.missileEmoji} ${this.missileName}\n${this.state.toUpperCase()} | Ammo: ${this.ammo}/${this.maxAmmo}`
+            : `🛡️ ${this.truckName}\n${this.defenseEmoji||''} ${this.defenseName||this.id}\n${this.state.toUpperCase()} | Ammo: ${this.ammo}/${this.maxAmmo}`;
+        this.marker.bindTooltip(tooltipFn, { sticky: false, direction: 'top', offset: [0, -50] });
+    }
+    buildPopupHTML() {
+        const statusColor = {idle:'#4a7a9b',ready:'#44cc44',moving:'#88ff44',standby:'#4488cc',siaga:'#ff4422'}[this.state]||'#aaa';
+        const statusText  = {idle:'IDLE',ready:'SIAP',moving:'BERGERAK ▶',standby:'STANDBY',siaga:'SIAGA ⚡'}[this.state]||this.state;
+        const id = this.id;
+
+        // Identity header
+        let identityHtml = '';
+        if (this.type === 'launcher') {
+            const tgtInfo = this.targetPos
+                ? `<span style="color:#ff6644;">${this.targetPos[0].toFixed(3)}°,${this.targetPos[1].toFixed(3)}°</span>`
+                : `<span style="color:#4a6a7a;">—</span>`;
+            identityHtml = `
+<div class="pu-title">🚛 ${this.truckName}</div>
+<div class="pu-row">${this.missileEmoji} Rudal: <b style="color:#ffcc00">${this.missileName}</b></div>
+<div class="pu-row">Kategori: <b>${this.missileCategory}</b> &nbsp;|&nbsp; Status: <b style="color:${statusColor}">${statusText}</b></div>
+<div class="pu-row">Ammo: <b>${this.ammo}/${this.maxAmmo}</b> &nbsp;|&nbsp; Target: ${tgtInfo}</div>
+<div class="pu-row" style="margin-top:3px;">⛽ BBM: <b style="color:${this.fuel_liters>40?'#44ff44':this.fuel_liters>15?'#ffaa44':'#ff4444'}">${this.fuel_liters.toFixed(1)}L / ${this.fuelCapacity}L</b><div style="width:100%;height:4px;background:#333;border-radius:2px;margin-top:2px;"><div style="width:${Math.round((this.fuel_liters/this.fuelCapacity)*100)}%;height:4px;background:${this.fuel_liters>40?'#44ff44':this.fuel_liters>15?'#ffaa44':'#ff4444'};border-radius:2px;"></div></div>${this.fuel_liters<=0?'<div style="font-size:8px;color:#ff4444;animation:blink .5s infinite;">⚠️ BBM HABIS — Isi ulang!</div>':''}</div>`;
+        } else {
+            identityHtml = `
+<div class="pu-title">🛡️ ${this.truckName}</div>
+<div class="pu-row">System: <b style="color:#88ccff">${this.defenseName||this.id}</b></div>
+<div class="pu-row">Status: <b style="color:${statusColor}">${statusText}</b> &nbsp;|&nbsp; Ammo: <b>${this.ammo}/${this.maxAmmo}</b></div>`;
+        }
+
+        let reloadHtml = '';
+        if (this.reloading) {
+            const remaining = Math.max(0, this.reloadEndTime - Date.now());
+            const pct = Math.max(0, Math.min(100, (1 - remaining/60000)*100));
+            reloadHtml = `<div class="pu-row" style="margin-top:3px;">🔄 Reload dari gudang: <b>${Math.ceil(remaining/1000)}s</b><div class="reload-progress"><div class="reload-bar" style="width:${pct}%"></div></div></div>`;
+        }
+        // Cooldown display (launcher only)
+        let cooldownHtml = '';
+        if (this.type === 'launcher' && this.lastLaunchTime) {
+            const cdRem = Math.max(0, this.LAUNCH_COOLDOWN - (Date.now() - this.lastLaunchTime));
+            if (cdRem > 0) {
+                const cdPct = Math.max(0, Math.min(100, (1 - cdRem/this.LAUNCH_COOLDOWN)*100));
+                cooldownHtml = `<div class="pu-row" style="margin-top:3px;">⏱️ Cooldown: <b>${Math.ceil(cdRem/1000)}s</b><div class="reload-progress"><div class="reload-bar" style="width:${cdPct}%;background:#ff8800;"></div></div></div>`;
+            }
+        }
+
+        // Position row
+        const posHtml = `<div class="pu-row">Pos: <b>${this.pos?this.pos[0].toFixed(3)+'°,'+this.pos[1].toFixed(3)+'°':'—'}</b></div>`;
+
+        let btns = '';
+        if (this.type === 'launcher') {
+            const isSiaga   = this.state === 'siaga';
+            const canLaunch = isSiaga && this.ammo > 0 && !this.reloading && this.targetPos;
+            const hasTgt    = !!this.targetPos;
+
+            // SET TARGET hanya tersedia saat SIAGA — mencegah bug posisi tidak dikunci
+            // Tombol target: hanya aktif saat SIAGA
+            // Saat ada target: tampilkan SET TARGET (ganti) + HAPUS TARGET
+            // Saat belum ada: tampilkan SET TARGET
+            let targetBtnHtml;
+            if (!isSiaga) {
+                targetBtnHtml = `<button class="pu-btn-grey" disabled>🎯 SET TARGET (aktifkan ⚡ SIAGA dulu)</button>`;
+            } else if (hasTgt) {
+                targetBtnHtml = `
+<button class="pu-btn-gold" onclick="startSetTargetForUnit('${id}');map.closePopup()">🎯 GANTI TARGET (tap peta)</button>
+<button class="pu-btn-grey" onclick="clearUnitTarget('${id}')">✕ Hapus Target</button>`;
+            } else {
+                targetBtnHtml = `<button class="pu-btn-gold" onclick="startSetTargetForUnit('${id}');map.closePopup()">🎯 SET TARGET (tap peta)</button>`;
+            }
+
+            const launchLabel = !isSiaga ? '🔴 Launch (aktifkan SIAGA dulu)'
+                              : !hasTgt  ? '🔴 Launch (set TARGET dulu)'
+                              : this.reloading ? '🔴 Launch (sedang reload)'
+                              : this.ammo<=0   ? '🔴 Launch (ammo habis)'
+                              : '🔴 LAUNCH STRIKE';
+            const fuelPct = this.fuel_liters / this.fuelCapacity;
+            const fuelEmpty = this.fuel_liters <= 0;
+            const oilAvail = _getOilRefineryStock() > 0;
+            const refuelLabel = fuelEmpty
+                ? (oilAvail ? '⛽ ISI ULANG BBM (kilang tersedia)' : '⛽ ISI ULANG BBM (kilang KOSONG!)')
+                : (fuelPct < 0.5 ? '⛽ Isi BBM (rendah)' : '⛽ Isi BBM');
+            btns = `
+<button class="pu-btn-green" onclick="startUnitRoutePicking('${id}');map.closePopup()">📍 Set Rute</button>
+<button class="pu-btn-blue" onclick="startUnitMovement('${id}')" ${(this.state==='moving'||fuelEmpty)?'disabled':''}>▶ Bergerak${fuelEmpty?' (BBM habis)':''}</button>
+<button class="pu-btn-orange" onclick="stopUnit('${id}','standby')">⏸ Standby</button>
+<button class="pu-btn-red" onclick="stopUnit('${id}','siaga');map.closePopup()">⚡ Siaga (Launch Site)</button>
+${targetBtnHtml}
+<button class="pu-btn-red" ${canLaunch?'':'disabled'} onclick="launchFromUnit('${id}')">${launchLabel}</button>
+<button class="pu-btn-gold" ${oilAvail?'':'disabled'} onclick="refuelUnit('${id}');map.closePopup()">${refuelLabel}</button>
+<button class="pu-btn-grey" onclick="removeUnit('${id}');map.closePopup()">🗑 Hapus Unit</button>`
+        } else {
+            btns = `
+<button class="pu-btn-green" onclick="startUnitRoutePicking('${id}');map.closePopup()">📍 Set Rute</button>
+<button class="pu-btn-blue" onclick="startUnitMovement('${id}')" ${this.state==='moving'?'disabled':''}>▶ Bergerak</button>
+<button class="pu-btn-orange" onclick="stopUnit('${id}','standby')">⏸ Berhenti</button>
+<button class="pu-btn-green" onclick="stopUnit('${id}','siaga');map.closePopup()">✅ Aktifkan Baterai</button>
+<button class="pu-btn-grey" onclick="removeUnit('${id}');map.closePopup()">🗑 Hapus Unit</button>`;
+        }
+
+        return `<div>${identityHtml}${posHtml}${reloadHtml}${cooldownHtml||''}<div class="popup-buttons">${btns}</div></div>`;
+    }
+    updatePopup() {
+        const html = this.buildPopupHTML();
+        const wasOpen = this.marker.getPopup() && this.marker.getPopup().isOpen();
+        this.marker.bindPopup(html, { maxWidth: 210, autoPan: true, closeOnClick: false, autoClose: false });
+        if (wasOpen) { setTimeout(() => { try { this.marker.openPopup(); } catch(e){} }, 10); }
+    }
+    showPopup() { this.updatePopup(); setTimeout(() => { try { this.marker.openPopup(); } catch(e){} }, 20); }
+    setState(newState) {
+        this.state = newState;
+        this.updateMarkerIcon();
+        this.updatePopup();
+        if (this.type === 'defense' && newState === 'siaga' && this.pos && !this.resolvedBattery) {
+            this.resolvedBattery = addDefenseBattery(this.pos[0], this.pos[1], this);
+        }
+        if (this.type === 'defense' && newState !== 'siaga' && this.resolvedBattery) {
+            this.resolvedBattery.remove();
+            this.resolvedBattery = null;
+        }
+        logMessage(`[${this.type.toUpperCase()} ${this.id}] State → ${newState}`);
+    }
+    updateMarkerIcon() {
+        const glow = this.glowColors[this.state] || '#888';
+        const dotClass = `t-dot-${this.state}`;
+        const imgSrc = this.type === 'defense' ? getDefenseTruckImg(selectedDefenseId) : this.imgFile;
+        const imgHtml = imgSrc ? `<img src="${imgSrc}" width="42" height="42" style="display:block;border-radius:4px;filter:drop-shadow(0 0 5px ${glow});" onerror="this.parentElement.querySelector('.truck-emoji-fb').style.display='flex';this.style.display='none';">` : '';
+        const emoji = this.type === 'defense' ? (DEFENSE_SYSTEMS[selectedDefenseId]?.emoji || '🛡️') : '🚛';
+        const iconHtml = `<div class="truck-wrap"><div class="t-dot ${dotClass}"></div>${imgHtml}<div class="truck-emoji-fb" style="display:${imgSrc ? 'none' : 'flex'};background:${glow}22;border-color:${glow};">${emoji}</div></div>`;
+        const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [46, 50], iconAnchor: [23, 46] });
+        this.marker.setIcon(icon);
+        this.marker.off('click').off('touchend');
+        const openFn = (e) => { L.DomEvent.stopPropagation(e); this.showPopup(); };
+        this.marker.on('click', openFn);
+        this.marker.on('touchend', openFn);
+        const tooltipFn = () => this.type === 'launcher'
+            ? `🚛 ${this.truckName}\n${this.missileEmoji} ${this.missileName}\n${this.state.toUpperCase()} | Ammo: ${this.ammo}/${this.maxAmmo}`
+            : `🛡️ ${this.truckName}\n${this.defenseEmoji||''} ${this.defenseName||this.id}\n${this.state.toUpperCase()} | Ammo: ${this.ammo}/${this.maxAmmo}`;
+        this.marker.bindTooltip(tooltipFn, { sticky: false, direction: 'top', offset: [0, -50] });
+    }
+    setRoute(coords) {
+        this.routeCoords = coords;
+        this.routeIdx = 0;
+        this.travelledDist = 0;
+        if (this.routeLine && this.map.hasLayer(this.routeLine)) this.map.removeLayer(this.routeLine);
+        if (coords.length > 1) {
+            this.routeLine = L.polyline(coords, { color: this.type==='launcher'?'#44ff88':'#44aaff', weight: 2.5, opacity: 0.6, dashArray: '7,5' }).addTo(this.map);
+        }
+        this.setState('ready');
+    }
+    startMoving() {
+        if (this.state === 'moving') return;
+        if (this.animId) cancelAnimationFrame(this.animId);
+        this.setState('moving');
+        const speedMs = (this.speedKph * this.simMult) / 3.6;
+        this.lastT = performance.now();
+        const coords = this.routeCoords;
+        if (coords.length < 2) { logMessage(`⚠️ ${this.type} ${this.id} no route`); return; }
+        const cumDist = new Array(coords.length);
+        cumDist[0] = 0;
+        for (let i = 1; i < coords.length; i++) cumDist[i] = cumDist[i-1] + this.map.distance(coords[i-1], coords[i]);
+        const totalDist = cumDist[coords.length-1];
+        let travelled = this.travelledDist || 0;
+        const tick = () => {
+            if (this.state !== 'moving') return;
+            const now = performance.now();
+            const dt = Math.min((now - this.lastT) / 1000, 0.05);
+            this.lastT = now;
+            const stepDist = speedMs * dt;
+            // ── BBM konsumsi saat bergerak (Point 2) ──
+            if (this.type === 'launcher' && this.fuel_liters !== undefined) {
+                const distKm = stepDist / 1000;
+                this.fuel_liters = Math.max(0, this.fuel_liters - distKm * this.fuelPerKm);
+                if (this.fuel_liters <= 0) {
+                    // BBM habis — berhenti paksa
+                    this.fuel_liters = 0;
+                    if (this.animId) { cancelAnimationFrame(this.animId); this.animId = null; }
+                    this.setState('standby');
+                    this.updatePopup();
+                    logMessage(`⛽ [${this.truckName}] BBM HABIS! Truck berhenti — isi ulang di kilang minyak.`);
+                    return;
+                }
+            }
+            travelled += stepDist;
+            if (travelled >= totalDist) {
+                this.pos = [...coords[coords.length-1]];
+                this.marker.setLatLng(this.pos);
+                this.travelledDist = 0;
+                // ── Hapus jejak rute setelah sampai tujuan — kurangi beban render ──
+                if (this.routeLine && this.map.hasLayer(this.routeLine)) {
+                    this.map.removeLayer(this.routeLine);
+                    this.routeLine = null;
+                }
+                this.setState('standby');
+                this.updatePopup();
+                logMessage(`[${this.type.toUpperCase()} ${this.id}] Tiba di tujuan — rute dibersihkan`);
+                return;
+            }
+            let lo=0, hi=coords.length-2;
+            while(lo<hi){ const mid=(lo+hi)>>1; if(cumDist[mid+1] < travelled) lo=mid+1; else hi=mid; }
+            const segIdx=lo;
+            const t = (travelled - cumDist[segIdx]) / (cumDist[segIdx+1]-cumDist[segIdx]);
+            this.pos = [ coords[segIdx][0] + (coords[segIdx+1][0]-coords[segIdx][0])*t, coords[segIdx][1] + (coords[segIdx+1][1]-coords[segIdx][1])*t ];
+            this.marker.setLatLng(this.pos);
+            this.travelledDist = travelled;
+            this.animId = requestAnimationFrame(tick);
+        };
+        this.animId = requestAnimationFrame(tick);
+        logMessage(`[${this.type.toUpperCase()} ${this.id}] Started moving`);
+    }
+    stopMoving(newState) {
+        if (this.animId) { cancelAnimationFrame(this.animId); this.animId = null; }
+        // ── Hapus jejak rute saat berhenti (standby/siaga) — kurangi beban render ──
+        if (newState === 'standby' || newState === 'siaga') {
+            if (this.routeLine && this.map.hasLayer(this.routeLine)) {
+                this.map.removeLayer(this.routeLine);
+                this.routeLine = null;
+            }
+        }
+        // setState already handles addDefenseBattery when newState='siaga'
+        // DO NOT call addDefenseBattery here again — it would create a duplicate marker
+        this.setState(newState);
+        this.updatePopup();
+    }
+    remove() {
+        if (this.animId) cancelAnimationFrame(this.animId);
+        if (this.marker && this.map.hasLayer(this.marker)) this.map.removeLayer(this.marker);
+        if (this.routeLine && this.map.hasLayer(this.routeLine)) this.map.removeLayer(this.routeLine);
+        if (this.type === 'defense' && this.resolvedBattery) this.resolvedBattery.remove();
+        logMessage(`[${this.type.toUpperCase()} ${this.id}] Removed`);
+    }
+    startReload() {
+        if (this.reloading) return;
+        // Cek stok gudang sebelum reload
+        const warehouse = this.type === 'launcher' ? getMissileWarehouse() : getInterceptorWarehouse();
+        if (!warehouse) {
+            logMessage(`⚠️ [${this.truckName||this.id}] Tidak ada gudang ${this.type==='launcher'?'rudal':'interceptor'} — bangun gudang terlebih dahulu!`);
+            return;
+        }
+        if (warehouse.stock <= 0) {
+            logMessage(`⚠️ [${this.truckName||this.id}] Gudang KOSONG (stock:0) — tunggu pabrik produksi!`);
+            return;
+        }
+        this.reloading = true;
+        this.reloadEndTime = Date.now() + 60000; // 1 menit reload dari gudang ke vehicle
+        this.updatePopup();
+        logMessage(`🔄 [${this.truckName||this.id}] Reload dimulai — 60 detik | Stok gudang: ${warehouse.stock}`);
+        const timer = setInterval(() => {
+            if (!this.reloading) { clearInterval(timer); return; }
+            if (Date.now() >= this.reloadEndTime) {
+                this.reloading = false;
+                // Ambil dari gudang
+                const wh = this.type === 'launcher' ? getMissileWarehouse() : getInterceptorWarehouse();
+                const toLoad = Math.min(this.maxAmmo - this.ammo, wh ? wh.stock : 0);
+                if (wh && toLoad > 0) {
+                    wh.stock -= toLoad;
+                    this.ammo = Math.min(this.maxAmmo, this.ammo + toLoad);
+                    wh.updateMarker();
+                    logMessage(`✅ [${this.truckName||this.id}] Reload +${toLoad} ammo | Stok gudang tersisa: ${wh.stock}`);
+                } else {
+                    logMessage(`⚠️ [${this.truckName||this.id}] Gudang habis saat reload!`);
+                }
+                this.updatePopup();
+                clearInterval(timer);
+                _updateWarehouseUI();
+            } else { this.updatePopup(); }
+        }, 1000);
+    }
+    consumeAmmo() {
+        if (this.ammo > 0) this.ammo--;
+        if (this.ammo === 0 && !this.reloading) this.startReload();
+        this.updatePopup();
+        return this.ammo;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FUNGSI UNTUK UNIT GLOBAL (sama seperti Rev24)
+// ═══════════════════════════════════════════════════════════════
+function getDefenseTruckImg(id) {
+    const TRUCK_ICONS = { IRON_DOME:'truckirondome.png', PANTSIR:'truckpantsir.png', PHALANX:'truckphalans.png', HQ_17:'truckhq17.png', DAVIDS_SLING:'truckdavidsling.png', PATRIOT:'truckpatriot.png', SAMP_T:'trucksamp_t.png', HQ_9:'truckhq9.png', S400:'trucks400.png', THAAD:'truckthaad.png', ARROW_2:'truckarrow2.png', ARROW_3:'truckarrow3.png', SM3:'trucksm3.png', GBI:'truckgbi.png', S500:'trucks500.png', GLIDE_BREAKER:'truckglidebreaker.png' };
+    return TRUCK_ICONS[id] ? `./icons/truck/${TRUCK_ICONS[id]}` : null;
+}
+function findUnitById(id) { return launcherUnits.find(u=>u.id===id) || defenseUnits.find(u=>u.id===id); }
+function startUnitRoutePicking(unitId) {
+    const unit = findUnitById(unitId);
+    if (!unit) return;
+    if (routePickingForUnit) cancelRoutePicking();
+    routePickingForUnit = { unitId, waypoints: [] };
+    map.getContainer().classList.add('route-picking-cursor');
+    logMessage(`[${unit.type.toUpperCase()} ${unit.id}] Route picking started. Click start point.`);
+    if (unit.pos) { routePickingForUnit.waypoints.push([unit.pos[0], unit.pos[1]]); logMessage(`Using current position as start. Click destination.`); }
+    else { logMessage(`Click start point on map.`); }
+}
+function cancelRoutePicking() {
+    if (routePickingForUnit) { map.getContainer().classList.remove('route-picking-cursor'); routePickingForUnit = null; }
+}
+
+// Per-launcher target setting — HANYA saat SIAGA
+function startSetTargetForUnit(unitId) {
+    const unit = findUnitById(unitId);
+    if (!unit || unit.type !== 'launcher') return;
+
+    // Hard guard: cegah pemanggilan di luar SIAGA
+    if (unit.state !== 'siaga') {
+        logMessage(`⚠️ [${unit.truckName}] SET TARGET hanya tersedia saat status SIAGA.`);
+        return;
+    }
+
+    // Cancel mode lain yang sedang aktif
+    if (routePickingForUnit) cancelRoutePicking();
+
+    // ── Saat GANTI TARGET: hapus marker target LAMA dari peta langsung ──
+    // Sehingga user tahu target sebelumnya sudah invalid dan harus tap baru
+    if (unit._targetMarker) {
+        if (map.hasLayer(unit._targetMarker)) map.removeLayer(unit._targetMarker);
+        unit._targetMarker = null;
+    }
+    unit.targetPos = null;  // clear data, tunggu tap peta untuk set baru
+    unit.updatePopup();
+
+    setTargetForUnitId = unitId;
+    map.getContainer().classList.add('route-picking-cursor');
+    logMessage(`🎯 [${unit.truckName}] Tap peta untuk set target ${unit.missileEmoji} ${unit.missileName} — target lama dihapus`);
+    updateStatus(`🎯 TAP PETA → TARGET ${unit.missileName.split(' ')[0].toUpperCase()}`, false);
+}
+function cancelSetTarget() {
+    if (setTargetForUnitId) {
+        map.getContainer().classList.remove('route-picking-cursor');
+        map.getContainer().style.cursor = '';
+        setTargetForUnitId = null;
+        updateStatus('ARMED', false);
+    }
+}
+// Hapus target marker dari launcher tertentu (marker + data)
+function clearUnitTarget(unitId) {
+    const unit = findUnitById(unitId);
+    if (!unit) return;
+    if (unit._targetMarker) {
+        if (map && map.hasLayer(unit._targetMarker)) map.removeLayer(unit._targetMarker);
+        unit._targetMarker = null;
+    }
+    unit.targetPos = null;
+    unit.updatePopup();
+    logMessage(`🗑️ [${unit.truckName}] Target dihapus`);
+}
+async function handleRoutePickingClick(latlng) {
+    if (!routePickingForUnit) return false;
+    const unit = findUnitById(routePickingForUnit.unitId);
+    if (!unit) { cancelRoutePicking(); return false; }
+    const waypoints = routePickingForUnit.waypoints;
+    if (waypoints.length === 0) {
+        waypoints.push([latlng.lat, latlng.lng]);
+        logMessage(`Start point set. Now click destination.`);
+        return true;
+    } else if (waypoints.length === 1) {
+        waypoints.push([latlng.lat, latlng.lng]);
+        const ptA = waypoints[0];
+        const ptB = waypoints[1];
+        let coords = await fetchRoute(ptA[0], ptA[1], ptB[0], ptB[1]);
+        if (!coords || coords.length < 2) {
+            logMessage(`⚠️ Routing failed, using straight line`);
+            const steps = 400;
+            coords = [];
+            for (let i=0; i<=steps; i++) { const t=i/steps; coords.push([ptA[0]+(ptB[0]-ptA[0])*t, ptA[1]+(ptB[1]-ptA[1])*t]); }
+        }
+        unit.setRoute(coords);
+        cancelRoutePicking();
+        return true;
+    }
+    return false;
+}
+function startUnitMovement(unitId) {
+    const unit = findUnitById(unitId);
+    if (unit && unit.routeCoords.length > 1) unit.startMoving();
+    else logMessage(`No route set for unit ${unitId}`);
+}
+function stopUnit(unitId, newState) { const unit = findUnitById(unitId); if (unit) unit.stopMoving(newState); }
+function removeUnit(unitId) {
+    const unit = findUnitById(unitId);
+    if (!unit) return;
+    // Clean up per-launcher target marker
+    if (unit._targetMarker && map && map.hasLayer(unit._targetMarker)) map.removeLayer(unit._targetMarker);
+    const idx = unit.type === 'launcher' ? launcherUnits.findIndex(u=>u.id===unitId) : defenseUnits.findIndex(u=>u.id===unitId);
+    unit.remove();
+    if (unit.type === 'launcher') launcherUnits.splice(idx,1);
+    else defenseUnits.splice(idx,1);
+    updateCounters();
+}
+// ── BBM Helpers (Point 2) ──
+function _getOilRefineryStock() {
+    if (typeof facilities === 'undefined') return 0;
+    const oil = facilities.find(f => f.type === 'oil' && !f.destroyed);
+    return oil ? oil.hp : 0;
+}
+function _consumeOilRefinery(liters) {
+    if (typeof facilities === 'undefined') return;
+    const oil = facilities.find(f => f.type === 'oil' && !f.destroyed);
+    if (oil) {
+        oil.hp = Math.max(0, oil.hp - liters * 0.5);
+        oil._drawMarker();
+        if (oil.hp <= 0) oil._destroy();
+        if (typeof _updateFacUI === 'function') _updateFacUI();
+    }
+}
+function refuelUnit(unitId) {
+    const unit = findUnitById(unitId);
+    if (!unit || unit.type !== 'launcher') return;
+    const oilFac = (typeof facilities !== 'undefined') ? facilities.find(f => f.type === 'oil' && !f.destroyed) : null;
+    if (!oilFac || oilFac.hp <= 0) {
+        logMessage(`\u26fd [${unit.truckName}] Tidak ada kilang minyak aktif! Bangun & tempatkan \uD83D\uDEE2\uFE0F Kilang Minyak dulu.`);
+        return;
+    }
+    const needed = unit.fuelCapacity - unit.fuel_liters;
+    if (needed <= 0) { logMessage(`\u26fd [${unit.truckName}] BBM sudah penuh.`); return; }
+    const available = oilFac.hp * 2;
+    const filled = Math.min(needed, available);
+    unit.fuel_liters = Math.min(unit.fuelCapacity, unit.fuel_liters + filled);
+    _consumeOilRefinery(filled);
+    unit.updatePopup();
+    logMessage(`\u26fd [${unit.truckName}] +${filled.toFixed(0)}L BBM | Total: ${unit.fuel_liters.toFixed(0)}L | Kilang HP: ${oilFac.hp.toFixed(0)}`);
+}
+async function launchFromUnit(unitId) {
+    const unit = findUnitById(unitId);
+    if (!unit || unit.type !== 'launcher') return;
+    // Use per-launcher target if set, else global target
+    const effectiveTarget = unit.targetPos || targetPos;
+    if (!effectiveTarget) { alert('Target belum di-set.\nKlik tombol 🎯 SET TARGET di popup launcher ini.'); return; }
+    if (unit.state !== 'siaga') { alert('Launcher belum SIAGA.\nKlik ⚡ Siaga terlebih dahulu.'); return; }
+    // Cooldown 30 detik antar peluncuran
+    const cooldownRemaining = unit.lastLaunchTime ? Math.max(0, unit.LAUNCH_COOLDOWN - (Date.now() - unit.lastLaunchTime)) : 0;
+    if (cooldownRemaining > 0) {
+        logMessage(`⏱️ [${unit.truckName}] Cooldown: ${Math.ceil(cooldownRemaining/1000)}s lagi`);
+        alert(`Cooldown peluncuran: ${Math.ceil(cooldownRemaining/1000)} detik lagi`);
+        return;
+    }
+    if (unit.reloading) { alert(`Sedang reload dari gudang... ${Math.ceil((unit.reloadEndTime-Date.now())/1000)}s lagi`); return; }
+    if (unit.ammo <= 0) {
+        const wh = getMissileWarehouse();
+        if (!wh || wh.stock <= 0) {
+            alert('Ammo habis & gudang rudal kosong!\nBangun gudang & tunggu pabrik produksi.');
+            return;
+        }
+        unit.startReload();
+        alert('Ammo habis! Reload dari gudang dimulai (60 detik).');
+        return;
+    }
+    // Launch uses the missile type locked to THIS launcher
+    const catData = MISSILE_CATALOG[unit.missileId];
+    if (!catData) { alert('Missile data tidak ditemukan untuk ' + unit.missileId); return; }
+    const aziDeg = calculateAzimuth(unit.pos, effectiveTarget);
+    document.getElementById('azimuth').value = aziDeg.toFixed(3);
+    // Determine effective pitch
+    // Refresh auto-pitch panel for this launcher's missile type & target
+    if (unit.pos && effectiveTarget) {
+        const distForPanel = map.distance(unit.pos, effectiveTarget) / 1000;
+        updateAutoPitchPanel(distForPanel, unit.id);
+    }
+    let pitchDeg = parseFloat(document.getElementById('pitch').value);
+    if (isNaN(pitchDeg)) pitchDeg = catData.defaultPitch || 45;
+    // Cruise: clamp pitch to valid range (5-88°), player chose this altitude
+    if (catData.isCruise) {
+        pitchDeg = Math.max(5, Math.min(88, pitchDeg));
+    }
+    // HGV: clamp pitch to reasonable glide-launch range (18-35°)
+    if (catData.isHGV) {
+        pitchDeg = Math.max(18, Math.min(35, pitchDeg));
+        logMessage(`[HGV] Launch pitch clamped to ${pitchDeg.toFixed(0)}° (glide-optimal range 18-35°)`);
+    }
+    // ICBM: minimum pitch 22° (can't depressed)
+    if (catData.category === 'ICBM' && pitchDeg < 22) {
+        pitchDeg = 22;
+        logMessage(`[ICBM] Minimum pitch 22° applied (depressed not viable for ICBM)`);
+    }
+    const config = { azimuth: aziDeg * Math.PI/180, pitch: pitchDeg, thrust: catData.thrust, isp: catData.isp, fuel: catData.fuel, dryMass: catData.dryMass, kickAlt: catData.kickAlt, stageSep: catData.stageSep, diam: catData.diam, dragRef: catData.dragRef };
+    missileCounter++;
+    const m = new BallisticMissile(missileCounter, unit.pos[0], unit.pos[1], effectiveTarget[0], effectiveTarget[1], config, catData, map);
+    activeMissiles.push(m);
+    unit.consumeAmmo();
+    updateCounters();
+    m.launch();
+    unit.lastLaunchTime = Date.now(); // set cooldown timer
+    updateStatus(`${activeMissiles.length} STRIKE(S) ACTIVE`, true);
+    logMessage(`🚀 ${catData.emoji||''} ${catData.name} | ${unit.truckName} → [${effectiveTarget[0].toFixed(3)}°,${effectiveTarget[1].toFixed(3)}°] | pitch:${pitchDeg.toFixed(0)}° | ammo:${unit.ammo} | cooldown:30s`);
+}
+function startAddUnit(type) {
+    addUnitMode = type;
+    map.getContainer().classList.add('route-picking-cursor');
+    logMessage(`Click on map to place new ${type} unit.`);
+}
+function handleAddUnitClick(latlng) {
+    if (!addUnitMode) return false;
+    if (addUnitMode === 'launcher') {
+        const newUnit = new MobileUnit('launcher', latlng.lat, latlng.lng, map);
+        launcherUnits.push(newUnit);
+        logMessage(`🚛 [TRUCK BARU] ${newUnit.truckName} ditempatkan | Rudal: ${newUnit.missileEmoji} ${newUnit.missileName} | Ammo: ${newUnit.ammo} | (Ganti rudal = ADD LAUNCHER baru)`);
+    } else if (addUnitMode === 'defense') {
+        const newUnit = new MobileUnit('defense', latlng.lat, latlng.lng, map);
+        defenseUnits.push(newUnit);
+        logMessage(`New defense added at ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`);
+    }
+    updateCounters();
+    addUnitMode = null;
+    map.getContainer().classList.remove('route-picking-cursor');
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INTERCEPTOR & DEFENSE BATTERY (sama seperti Rev24)
+// ═══════════════════════════════════════════════════════════════
+class Interceptor {
+    constructor(id, battery, targetMissile, config, mapInstance) {
+        this.id = id; this.battery = battery; this.targetMissile = targetMissile;
+        this.config = config; this.map = mapInstance;
+        this.lat = battery.lat; this.lng = battery.lng; this.alt = 10;
+        this.mass = config.mass; this.boostDuration = config.boostDuration;
+        this.targetSpeed = config.interceptorSpeed;
+        this.boostAccel = this.targetSpeed / this.boostDuration;
+        this.dragCd = config.dragCd; this.dragArea = config.dragArea;
+        this.launchTime = performance.now() / 1000;
+        const toCart = (lat, lng, alt) => ({ x: lng * 111320 * Math.cos(lat * Math.PI / 180), y: lat * 111320, z: alt });
+        const pM = toCart(this.lat, this.lng, this.alt);
+        const pT = toCart(targetMissile.lat, targetMissile.lng, targetMissile.alt);
+        const vT = { x: targetMissile.vx, y: targetMissile.vy, z: targetMissile.vz };
+        let t_est = Math.hypot(pT.x - pM.x, pT.y - pM.y, pT.z - pM.z) / this.targetSpeed;
+        for (let i = 0; i < 4; i++) { const p = { x: pT.x + vT.x * t_est, y: pT.y + vT.y * t_est, z: pT.z + vT.z * t_est }; t_est = Math.max(0.01, Math.hypot(p.x - pM.x, p.y - pM.y, p.z - pM.z) / this.targetSpeed); }
+        const pPred = { x: pT.x + vT.x * t_est, y: pT.y + vT.y * t_est, z: pT.z + vT.z * t_est };
+        const dx = pPred.x - pM.x, dy = pPred.y - pM.y, dz = pPred.z - pM.z, dist = Math.max(1, Math.hypot(dx, dy, dz));
+        const u = { x: dx / dist, y: dy / dist, z: dz / dist };
+        const initSpeed = 50;
+        this.vx = u.x * initSpeed; this.vy = u.y * initSpeed; this.vz = u.z * initSpeed;
+        this.isActive = true; this.marker = null; this.animationId = null;
+        this.lastTime = performance.now(); this.interceptRadius = 300;
+        this.interceptTriggered = false; this.lastR = undefined;
+    }
+    getPhase(t) { return t < this.boostDuration ? 'boost' : 'coast'; }
+    getThrustAccel(t, uv, uTarget) { if (t < this.boostDuration) { const dir = uTarget || uv; return { x: dir.x * this.boostAccel, y: dir.y * this.boostAccel, z: dir.z * this.boostAccel }; } return { x: 0, y: 0, z: 0 }; }
+    getDragAccel(vx, vy, vz, alt) { const v = Math.hypot(vx, vy, vz); if (v < 0.1) return { x: 0, y: 0, z: 0 }; const rho = 1.225 * Math.exp(-alt / 8500); const da = (0.5 * rho * v * v * this.dragCd * this.dragArea) / this.mass; return { x: -(vx / v) * da, y: -(vy / v) * da, z: -(vz / v) * da }; }
+    toLocal(lat, lng, alt) { const cosLat = Math.cos(this.lat * Math.PI / 180); return { x: (lng - this.lng) * 111320 * cosLat, y: (lat - this.lat) * 111320, z: alt - this.alt }; }
+    updateGuidance(dt) {
+        if (!this.targetMissile || !this.targetMissile.isActive) { this.destroy(); return false; }
+        const tgt = this.targetMissile;
+        const rel = this.toLocal(tgt.lat, tgt.lng, tgt.alt);
+        const R = Math.hypot(rel.x, rel.y, rel.z);
+        // Kill radius: terminal systems (Iron Dome, Patriot) have proximity fuze ~10-30m
+        // We use 80m for gameplay balance — realistic enough
+        const KILL_RADIUS = 80;
+        if (R < KILL_RADIUS) { this.interceptSuccess(); return false; }
+        if (this.lastR !== undefined && this.lastR < 250 && R > this.lastR) { this.interceptSuccess(); return false; }
+        this.lastR = R;
+        const tvx = tgt.vx, tvy = tgt.vy, tvz = tgt.vz;
+        const curSpeed = Math.hypot(this.vx, this.vy, this.vz);
+        const effSpeed = Math.max(curSpeed, this.targetSpeed * 0.6);
+        let t_est = R / (effSpeed + 1);
+        for (let i = 0; i < 4; i++) { const px = rel.x + tvx * t_est; const py = rel.y + tvy * t_est; const pz = rel.z + tvz * t_est; const dist = Math.hypot(px, py, pz); t_est = Math.max(0.1, dist / (effSpeed + 1)); if (tgt.alt + tvz * t_est < 0) t_est = Math.max(0.1, -tgt.alt / tvz); }
+        t_est = Math.min(t_est, 120);
+        const px = rel.x + tvx * t_est, py = rel.y + tvy * t_est, pz = Math.max(5, rel.z + tvz * t_est); // clamp=5m (was 500m — broke cruise intercept)
+        const Rp = Math.hypot(px, py, pz);
+        if (Rp < 1) { this.interceptSuccess(); return false; }
+        const desX = px / Rp, desY = py / Rp, desZ = pz / Rp;
+        const vMag = Math.hypot(this.vx, this.vy, this.vz);
+        const cvx = vMag > 1 ? this.vx / vMag : desX, cvy = vMag > 1 ? this.vy / vMag : desY, cvz = vMag > 1 ? this.vz / vMag : desZ;
+        const ft = (performance.now() / 1000) - this.launchTime;
+        const maxAcc = this.config.maxG * G0;
+        const errX = desX - cvx, errY = desY - cvy, errZ = desZ - cvz;
+        const dot = errX * cvx + errY * cvy + errZ * cvz;
+        const latX = errX - dot * cvx, latY = errY - dot * cvy, latZ = errZ - dot * cvz;
+        const latMag = Math.hypot(latX, latY, latZ);
+        let ax = 0, ay = 0, az = 0;
+        if (latMag > 0.001) { const corrAcc = Math.min(maxAcc, latMag * effSpeed * 3.0); ax = latX / latMag * corrAcc; ay = latY / latMag * corrAcc; az = latZ / latMag * corrAcc; }
+        const ta = this.getThrustAccel(ft, { x: cvx, y: cvy, z: cvz }, { x: desX, y: desY, z: desZ });
+        const da = this.getDragAccel(this.vx, this.vy, this.vz, this.alt);
+        this.vx += (ax + ta.x - da.x) * dt; this.vy += (ay + ta.y - da.y) * dt; this.vz += (az + ta.z - da.z - G0) * dt;
+        if (ft > this.boostDuration) { const maxSpd = this.targetSpeed * 1.5; const spd = Math.hypot(this.vx, this.vy, this.vz); if (spd > maxSpd) { this.vx = this.vx / spd * maxSpd; this.vy = this.vy / spd * maxSpd; this.vz = this.vz / spd * maxSpd; } }
+        this.lat += (this.vy * dt) / 111320; this.lng += (this.vx * dt) / (111320 * Math.cos(this.lat * Math.PI / 180)); this.alt += this.vz * dt;
+        if (this.alt < 0) this.alt = 0;
+        const distB = this.map.distance([this.battery.lat, this.battery.lng], [this.lat, this.lng]);
+        if (distB > this.battery.engagementRange * 1.5) { this.destroy(); return false; }
+        return true;
+    }
+    interceptSuccess() {
+        if (!this.isActive || this.interceptTriggered) return;
+        this.interceptTriggered = true;
+        this.isActive = false;
+        const isOptimal = this.targetMissile?.catalogData && this.battery.system.canIntercept.includes(this.targetMissile.catalogData.category);
+        const hitChance = isOptimal ? this.battery.system.baseSuccessRate : 0.05;
+        if (Math.random() > hitChance) {
+            if (this.targetMissile && this.targetMissile.targetedBy) this.targetMissile.targetedBy.delete(this.battery);
+            logMessage(`⚠️ [${this.battery.system.name}] MISS #${this.targetMissile?.id} — guidance failure`);
+            this.createInterceptEffect();
+            this.destroy();
+            return;
+        }
+        if (this.targetMissile && this.targetMissile.isActive) { const alt = this.targetMissile.alt; this.targetMissile.destroy(); logMessage(`✅ [${this.battery.system.name}] DESTROYED #${this.targetMissile.id} at ${(alt / 1000).toFixed(1)}km alt`); }
+        this.createInterceptEffect();
+        this.destroy();
+    }
+    createInterceptEffect() { const sz = 54; const html = `<div class="intercept-flash"><div class="core"></div></div>`; const icon = L.divIcon({ className: '', html, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }); const mk = L.marker([this.lat, this.lng], { icon, interactive: false, zIndexOffset: 2100 }).addTo(this.map); setTimeout(() => { if (this.map && mk && this.map.hasLayer(mk)) this.map.removeLayer(mk); }, 520); }
+    createIcon() { const div = document.createElement('div'); div.className = 'missile-container'; const colors = { IRON_DOME: 'background:linear-gradient(90deg,#2c3e50 0%,#e67e22 50%,#2c3e50 100%);', PANTSIR: 'background:linear-gradient(90deg,#2c3e50 0%,#e74c3c 50%,#2c3e50 100%);', PHALANX: 'background:linear-gradient(90deg,#1a1a2e 0%,#3498db 50%,#1a1a2e 100%);', HQ_17: 'background:linear-gradient(90deg,#1a1a1a 0%,#e74c3c 50%,#1a1a1a 100%);', DAVIDS_SLING: 'background:linear-gradient(90deg,#1a2e1a 0%,#2ecc71 50%,#1a2e1a 100%);', PATRIOT: 'background:linear-gradient(90deg,#1a1a2e 0%,#ef4444 50%,#1a1a2e 100%);', SAMP_T: 'background:linear-gradient(90deg,#1a1a2e 0%,#4466ff 50%,#1a1a2e 100%);', HQ_9: 'background:linear-gradient(90deg,#1a1a1a 0%,#ff6622 50%,#1a1a1a 100%);', S400: 'background:linear-gradient(90deg,#1a0a0a 0%,#ff4466 50%,#1a0a0a 100%);', THAAD: 'background:linear-gradient(90deg,#0f0f23 0%,#a855f7 50%,#0f0f23 100%);', ARROW_2: 'background:linear-gradient(90deg,#0a1a2a 0%,#0088ff 50%,#0a1a2a 100%);', ARROW_3: 'background:linear-gradient(90deg,#020820 0%,#0044ff 50%,#020820 100%);', SM3: 'background:linear-gradient(90deg,#0a0a2a 0%,#4488ff 50%,#0a0a2a 100%);', GBI: 'background:linear-gradient(90deg,#1a0500 0%,#ff4400 50%,#1a0500 100%);', S500: 'background:linear-gradient(90deg,#1a001a 0%,#ff00aa 50%,#1a001a 100%);', GLIDE_BREAKER: 'background:linear-gradient(90deg,#001a0a 0%,#44ffaa 50%,#001a0a 100%);', ARROW_4: 'background:linear-gradient(90deg,#001a2a 0%,#00ccff 50%,#001a2a 100%);' }; const col = colors[this.battery.type] || 'background:linear-gradient(90deg,#1a1a1a 0%,#aaa 50%,#1a1a1a 100%);'; div.innerHTML = `<div class="missile-body" style="${col}"><div class="missile-nose"></div><div class="missile-fin fin-left"></div><div class="missile-fin fin-right"></div></div><div class="flame-ascent"></div>`; return L.divIcon({ className: 'missile-wrapper', html: div.outerHTML, iconSize: [20, 55], iconAnchor: [10, 27] }); }
+    updateRotation() { if (!this.marker || !this.marker._icon) return; const vH = Math.hypot(this.vx, this.vy); if (vH < 1) return; const angleDeg = Math.atan2(this.vx, this.vy) * 180 / Math.PI; const el = this.marker._icon; const cur = el.style.transform || ''; const translateMatch = cur.match(/translate(?:3d)?\([^)]+\)/); const translate = translateMatch ? translateMatch[0] : ''; el.style.transform = (translate ? translate + ' ' : '') + `rotate(${angleDeg}deg)`; el.style.transformOrigin = 'center center'; }
+    animate() { if (!this.isActive) return; const now = performance.now(); let dt = Math.min(0.033, (now - this.lastTime) / 1000); if (dt <= 0.001) { this.lastTime = now; this.animationId = requestAnimationFrame(() => this.animate()); return; } this.lastTime = now; if (!this.updateGuidance(dt) || !this.isActive) return; if (this.marker) { this.marker.setLatLng([this.lat, this.lng]); this.updateRotation(); } this.animationId = requestAnimationFrame(() => this.animate()); }
+    launch() { this.marker = L.marker([this.lat, this.lng], { icon: this.createIcon(), interactive: false, zIndexOffset: 900 }).addTo(this.map); this.animate(); }
+    destroy() { this.isActive = false; if (this.targetMissile && this.targetMissile.targetedBy) this.targetMissile.targetedBy.delete(this.battery); if (this.animationId) cancelAnimationFrame(this.animationId); if (this.marker && this.map && this.map.hasLayer(this.marker)) this.map.removeLayer(this.marker); const idx = activeInterceptors.findIndex(i => i.id === this.id); if (idx !== -1) activeInterceptors.splice(idx, 1); }
+}
+class DefenseBattery {
+    constructor(lat, lng, systemId, mapInstance, mobileUnit) {
+        this.lat = lat; this.lng = lng; this.system = DEFENSE_SYSTEMS[systemId]; this.type = systemId; this.map = mapInstance;
+        this.mobileUnit = mobileUnit;
+        this.ammo = mobileUnit ? mobileUnit.ammo : this.system.ammo;
+        this.maxAmmo = mobileUnit ? mobileUnit.maxAmmo : this.system.ammo;
+        this.lastShotTime = 0; this.isActive = true;
+        this.radarRange = this.system.radarRange; this.engagementRange = this.system.engagementRange;
+        this.marker = null; this.radarCircle = null;
+        this.createMarker(); this.createRadarCircle();
+        logMessage(`📍 ${this.system.name} deployed | Ammo:${this.ammo} Range:${(this.engagementRange / 1000).toFixed(0)}km`);
+    }
+    createMarker() { 
+        const TRUCK_ICONS = { IRON_DOME: 'truckirondome.png', PANTSIR: 'truckpantsir.png', PHALANX: 'truckphalans.png', HQ_17: 'truckhq17.png', DAVIDS_SLING: 'truckdavidsling.png', PATRIOT: 'truckpatriot.png', SAMP_T: 'trucksamp_t.png', HQ_9: 'truckhq9.png', S400: 'trucks400.png', THAAD: 'truckthaad.png', ARROW_2: 'truckarrow2.png', ARROW_3: 'truckarrow3.png', SM3: 'trucksm3.png', GBI: 'truckgbi.png', S500: 'trucks500.png', GLIDE_BREAKER: 'truckglidebreaker.png', ARROW_4: 'truckarrow4.png' }; 
+        const tierColors = { 1: '#3b82f6', 2: '#ef4444', 3: '#a855f7', 4: '#00ff88' }; 
+        const col = tierColors[this.system.tier] || '#888'; 
+        const fname = TRUCK_ICONS[this.type] || null; 
+        const imgPath = fname ? `./icons/truck/${fname}` : ''; 
+        const label = `<div style="position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:7px;white-space:nowrap;background:rgba(0,0,0,0.9);padding:2px 5px;border-radius:2px;color:${col};font-family:monospace;">${this.system.name.split(' ')[0]}<br><span data-ammo>🚀${this.ammo}</span></div>`; 
+        let innerHtml; 
+        if (fname) { 
+            innerHtml = `<div style="position:relative;width:44px;height:44px;"><img src="${imgPath}" width="44" height="44" style="display:block;border-radius:4px;filter:drop-shadow(0 0 4px ${col});" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" alt="${this.system.name}"><div style="display:none;position:absolute;top:0;left:0;width:44px;height:44px;background:${col}22;border:1px solid ${col};border-radius:50%;align-items:center;justify-content:center;font-size:24px;">${this.system.emoji}</div>${label}</div>`; 
+        } else { 
+            innerHtml = `<div style="position:relative;width:44px;height:44px;"><div style="width:44px;height:44px;background:${col}22;border:1px solid ${col};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;animation:pulse 1s infinite;">${this.system.emoji}</div>${label}</div>`; 
+        } 
+        const div = document.createElement('div'); div.className = 'defense-battery-marker'; div.innerHTML = innerHtml; 
+        const icon = L.divIcon({ className: 'defense-marker', html: div.outerHTML, iconSize: [44, 66], iconAnchor: [22, 22] }); 
+        this.marker = L.marker([this.lat, this.lng], { icon, zIndexOffset: 500 }).addTo(this.map); 
+        this.marker.bindTooltip(`${this.system.name}\nAmmo:${this.ammo}\nRange:${(this.engagementRange / 1000).toFixed(0)}km\nTier:${this.system.tier}`, { direction: 'top' }); 
+    }
+    createRadarCircle() { 
+        this.radarCircle = L.circle([this.lat, this.lng], { radius: this.radarRange, color: this.system.radarColor, weight: 1, fillColor: this.system.radarColor, fillOpacity: 0.03, opacity: 0.25, dashArray: '5,10' }).addTo(this.map); 
+        this.engageCircle = L.circle([this.lat, this.lng], { radius: this.engagementRange, color: this.system.radarColor, weight: 1.5, fillColor: this.system.radarColor, fillOpacity: 0.07, opacity: 0.6, dashArray: null }).addTo(this.map); 
+    }
+    getMissileThreatCategory(missile) { 
+        const cat = missile.catalogData?.category || 'SRBM'; 
+        const catsMap = { SRBM: 'SRBM', MRBM: 'MRBM', LRBM: 'LRBM', ICBM: 'ICBM', HGV: 'HGV', CRUISE: 'CRUISE' }; 
+        const threatCat = catsMap[cat] || 'SRBM'; 
+        if (!this.system.canIntercept.includes(threatCat)) return null; 
+        return threatCat; 
+    }
+    assessThreat(missile) { 
+        if (!missile.isActive) return false; 
+        if (!this.getMissileThreatCategory(missile)) return false; 
+        const horizDist = this.map.distance([this.lat, this.lng], [missile.lat, missile.lng]); 
+        if (horizDist > this.engagementRange) return false; 
+        if (horizDist < this.system.minEngagementRange) return false; 
+        if (horizDist > this.radarRange) return false; 
+        const alt = missile.alt; 
+        if (alt < this.system.minEngageAlt) return false; 
+        if (alt > this.system.maxEngageAlt) return false; 
+        if (this.system.requireDescending && missile.vz > 0) return false; 
+        const mach = Math.hypot(missile.vx, missile.vy, missile.vz) / SPEED_OF_SOUND; 
+        if (mach > this.system.maxTargetMach) return false; 
+        return true; 
+    }
+    scanAndEngage(currentTime, missiles) { 
+        if (!this.isActive) return false; 
+        if (!this.mobileUnit) return false;
+        if (this.mobileUnit.ammo <= 0 || this.mobileUnit.reloading) return false;
+        if (currentTime - this.lastShotTime < this.system.reloadTime) return false; 
+        let best = null, bestDist = Infinity; 
+        for (const m of missiles) { 
+            if (!m.isActive || (m.targetedBy && m.targetedBy.has(this))) continue; 
+            if (this.assessThreat(m)) { 
+                const d = this.map.distance([this.lat, this.lng], [m.lat, m.lng]);
+                // For cruise missiles flying low, use actual 3D distance for accuracy
+                const d3 = m.isCruise ? Math.hypot(d, Math.max(0, m.alt)) : d;
+                if (d3 < bestDist) { bestDist = d3; best = m; } 
+            } 
+        } 
+        if (best) { 
+            if (!best.targetedBy) best.targetedBy = new Set(); 
+            best.targetedBy.add(this); 
+            this.launchInterceptor(best); 
+            this.mobileUnit.consumeAmmo();
+            this.ammo = this.mobileUnit.ammo;
+            this.lastShotTime = currentTime; 
+            if (this.marker) { 
+                this.marker.bindTooltip(`${this.system.name}\nAmmo:${this.ammo}\nRange:${(this.engagementRange / 1000).toFixed(0)}km`, { direction: 'top' }); 
+                const el = this.marker._icon; 
+                if (el) { const lbl = el.querySelector('[data-ammo]'); if (lbl) lbl.textContent = `🚀${this.ammo}`; } 
+            } 
+            logMessage(`🛡️ [${this.system.name}] FIRING → #${best.id} ${best.catalogData?.name || ''} | dist:${(bestDist / 1000).toFixed(1)}km | ammo left:${this.mobileUnit.ammo}`); 
+            return true; 
+        } 
+        return false; 
+    }
+    launchInterceptor(target) { 
+        const id = ++interceptorCounter; 
+        const ic = new Interceptor(id, this, target, this.system, this.map); 
+        activeInterceptors.push(ic); ic.launch(); 
+    }
+    remove() { 
+        this.isActive = false; 
+        if (this.marker && this.map && this.map.hasLayer(this.marker)) this.map.removeLayer(this.marker); 
+        if (this.radarCircle && this.map && this.map.hasLayer(this.radarCircle)) this.map.removeLayer(this.radarCircle); 
+        if (this.engageCircle && this.map && this.map.hasLayer(this.engageCircle)) this.map.removeLayer(this.engageCircle); 
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BALLISTIC MISSILE CLASS (FIXED PITCH EFFECT)
+// ═══════════════════════════════════════════════════════════════
+class BallisticMissile {
+    constructor(id, launchLat, launchLng, targetLat, targetLng, config, catalogData, mapInstance) {
+        this.id = id; this.launchLat = +launchLat; this.launchLng = +launchLng; this.targetLat = +targetLat; this.targetLng = +targetLng;
+        this.config = config; this.catalogData = catalogData; this.map = mapInstance; this.isActive = true; this.marker = null; this.animationId = null;
+        this.isTargeted = false; this.targetedBy = new Set(); this.lat = this.launchLat; this.lng = this.launchLng; this.alt = 1.0;
+        this.vx = 0; this.vy = 0; this.vz = 0; this.t = 0; this.fuel = config.fuel; this.dryMass = config.dryMass; this.initialFuel = config.fuel;
+        this.isSep = false; this.gravityTurnActive = false; 
+        this.pitchRad = config.pitch * Math.PI / 180;
+        this.initialPitchRad = this.pitchRad; // stored permanently to control gravity turn rate
+        this.aziRad = config.azimuth;
+        this.lastLogTime = 0; this.impactVelocity = 0; this.lastTime = performance.now();
+        this.isHGV = catalogData.isHGV || false;
+        this.isCruise = catalogData.isCruise || false; this.glidePhase = false; this.glideOscillation = 0; this.skipCount = 0;
+        this.cruiseReachedAlt = false; this.terminalDive = false; this.terminalPopUp = false;
+    }
+    getMissilePhase() {
+        const hasFuel = this.fuel > 0;
+        if (hasFuel && this.alt < 20000) return 'boost';
+        if (hasFuel && this.alt >= 20000) return 'ascent';
+        if (this.isHGV && this.glidePhase) return 'reentry'; // HGV glide = plasma glow
+        if (!hasFuel && this.vz > 0 && this.alt > 30000) return 'coast';   // ascending coast
+        if (!hasFuel && this.alt > 60000) return 'coast';                   // exo-atmospheric
+        if (!hasFuel && this.alt <= 60000) return 'reentry';                // reentry heating
+        return 'coast';
+    }
+    createMissileIcon(phase) { const div = document.createElement('div'); div.className = 'missile-container'; let flame = '', plasma = ''; if (phase === 'boost') flame = '<div class="flame-boost"></div>'; else if (phase === 'ascent') flame = '<div class="flame-ascent"></div>'; else if (phase === 'coast') flame = '<div class="smoke-trail"></div>'; else if (phase === 'reentry') plasma = this.isHGV ? '<div class="hgv-plasma"></div>' : '<div class="reentry-plasma"></div>'; return L.divIcon({ className: 'missile-wrapper', html: `${plasma}<div class="missile-body"><div class="missile-nose"></div><div class="missile-fin fin-left"></div><div class="missile-fin fin-right"></div></div>${flame}`, iconSize: [20, 60], iconAnchor: [10, 30] }); }
+    getDragCoeff(mach, baseCd) { if (this.isCruise) return baseCd * 0.9; if (mach < 0.8) return baseCd * 0.7; if (mach < 1.05) return baseCd * 2.5; if (mach < 2.0) return baseCd * 1.8; return baseCd * 1.5; }
+    lerp(a, b, t) { return a + (b - a) * Math.min(0.03, Math.max(0.01, t)); }
+    updateRotation() { if (!this.marker || !this.marker._icon) return; const vH = Math.hypot(this.vx, this.vy); if (vH < 1) return; const angleDeg = Math.atan2(this.vx, this.vy) * 180 / Math.PI; const el = this.marker._icon; const cur = el.style.transform || ''; const translateMatch = cur.match(/translate(?:3d)?\([^)]+\)/); const translate = translateMatch ? translateMatch[0] : ''; el.style.transform = (translate ? translate + ' ' : '') + `rotate(${angleDeg}deg)`; el.style.transformOrigin = 'center center'; }
+    createGifExplosion(lat, lng, vel) { const scale = Math.min(2.0, 0.8 + vel / 2000); const sz = Math.round(90 * scale); const sparks = Array.from({ length: 8 }, (_, i) => { const a = i * (360 / 8) * Math.PI / 180; const d = Math.round(30 + Math.random() * 25); return `<div class="spark" style="top:${Math.round(sz / 2)}px;left:${Math.round(sz / 2)}px;--sx:${Math.round(Math.cos(a) * d)}px;--sy:${Math.round(Math.sin(a) * d)}px;animation-delay:${(i * 0.02).toFixed(2)}s;background:${i % 2 ? '#ffcc00' : '#ff6600'};"></div>`; }).join(''); const html = `<div class="css-explosion" style="width:${sz}px;height:${sz}px;"><div class="ring ring1" style="width:${sz}px;height:${sz}px;top:0;left:0;"></div><div class="ring ring2" style="width:${Math.round(sz * 0.6)}px;height:${Math.round(sz * 0.6)}px;top:${Math.round(sz * 0.2)}px;left:${Math.round(sz * 0.2)}px;"></div>${sparks}</div>`; const icon = L.divIcon({ className: '', html, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }); const mk = L.marker([lat, lng], { icon, interactive: false, zIndexOffset: 2000 }).addTo(this.map); impactMarkers.push(mk); setTimeout(() => { if (this.map && mk && this.map.hasLayer(mk)) this.map.removeLayer(mk); }, 700); const sw = L.circle([lat, lng], { radius: 60 * scale, color: '#ffaa44', weight: 2, fillColor: '#ff6622', fillOpacity: .6 }).addTo(this.map); impactMarkers.push(sw); setTimeout(() => { if (this.map && sw && this.map.hasLayer(sw)) this.map.removeLayer(sw); }, 350); const sw2 = L.circle([lat, lng], { radius: 120 * scale, color: '#ff4400', weight: 1, fillOpacity: 0, opacity: 0.5 }).addTo(this.map); impactMarkers.push(sw2); setTimeout(() => { if (this.map && sw2 && this.map.hasLayer(sw2)) this.map.removeLayer(sw2); }, 500); }
+    addHistoryMarker(lat, lng, vel) { const sz = Math.min(70, 48 + Math.floor(vel / 800)); const div = document.createElement('div'); div.className = 'history-marker-container'; const img = document.createElement('img'); img.src = 'https://cdn.pixabay.com/animation/2026/02/03/15/02/15-02-03-241_512.gif'; img.className = 'history-gif'; img.style.width = sz + 'px'; img.style.height = sz + 'px'; div.appendChild(img); const icon = L.divIcon({ className: 'history-strike-icon', html: div.outerHTML, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }); const mk = L.marker([lat, lng], { icon, interactive: true, zIndexOffset: 800 }).addTo(this.map); mk.bindTooltip(`💀 IMPACT | ${this.catalogData.name} | Missile #${this.id}`, { sticky: false, direction: 'top' }); historyMarkers.push(mk); // Point 4: Hapus GIF api setelah 60 detik (1 menit)
+    const mapRef = this.map; setTimeout(() => { if (mapRef && mk && mapRef.hasLayer(mk)) { mapRef.removeLayer(mk); const idx = historyMarkers.indexOf(mk); if (idx !== -1) historyMarkers.splice(idx, 1); } }, 60000); }
+    animate() {
+        if (!this.isActive) return;
+        const now = performance.now();
+        let dt = Math.min(0.033, (now - this.lastTime) / 1000);
+        if (dt <= 0) { this.animationId = requestAnimationFrame(() => this.animate()); return; }
+        this.lastTime = now; this.t += dt;
+        let currentMass = this.fuel + this.dryMass;
+        if (this.isCruise) {
+            // cruise missile code (unchanged, same as Rev24)
+            // Cruise altitude controlled by pitch input (player challenge)
+            // pitch 5-20° → low NOE (50-150m), pitch 21-45° → medium (150-500m), pitch 46-88° → high arc (500-1500m)
+            const pitchDeg = this.pitchRad * 180 / Math.PI;
+            const CRUISE_ALT = pitchDeg <= 20
+                ? Math.max(30,  pitchDeg * 7)      // NOE: 35m-140m
+                : pitchDeg <= 45
+                ? 140 + (pitchDeg-20) * 14          // medium: 140m-490m
+                : Math.min(1800, 490 + (pitchDeg-45) * 30);  // high arc: 490m-1800m
+            const CRUISE_SPEED = 280, CLIMB_SPEED = 200;
+            const TERMINAL_DIST = pitchDeg > 45 ? 12000 : 8000; // high-arc needs earlier terminal
+            if (this.fuel > 0) { const mdot = this.config.thrust / (this.config.isp * G0) * 0.04; this.fuel = Math.max(0, this.fuel - mdot * dt); }
+            const rho = 1.225 * Math.exp(-Math.max(0, this.alt) / 8500);
+            const vH = Math.hypot(this.vx, this.vy);
+            const curAz = vH > 1 ? Math.atan2(this.vx, this.vy) : this.aziRad;
+            const dLon = (this.targetLng - this.lng) * Math.PI / 180;
+            const φ1 = this.lat * Math.PI / 180, φ2 = this.targetLat * Math.PI / 180;
+            const desAz = Math.atan2(Math.sin(dLon) * Math.cos(φ2), Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dLon));
+            let dAz = desAz - curAz;
+            while (dAz > Math.PI) dAz -= 2 * Math.PI;
+            while (dAz < -Math.PI) dAz += 2 * Math.PI;
+            const distToTarget = this.map.distance([this.lat, this.lng], [this.targetLat, this.targetLng]);
+            let phase_label = 'CRUISE', targetAlt = CRUISE_ALT, targetSpeed = CRUISE_SPEED, pitchCmd = 0;
+            if (!this.cruiseReachedAlt) { phase_label = 'CLIMB'; targetAlt = CRUISE_ALT; targetSpeed = CLIMB_SPEED; pitchCmd = 20 * Math.PI / 180; if (this.alt >= CRUISE_ALT - 5 && vH > 50) { this.cruiseReachedAlt = true; logMessage(`[M-${this.id}] ✈️ CRUISE altitude reached ${this.alt.toFixed(0)}m`); } }
+            else if (distToTarget < TERMINAL_DIST && !this.terminalDive) {
+                this.terminalDive = true;
+                this.terminalPopUp = pitchDeg < 50; // only pop-up for lower pitch profiles
+                logMessage(`[M-${this.id}] 🎯 TERMINAL phase — ${(distToTarget/1000).toFixed(1)}km | alt:${this.alt.toFixed(0)}m`);
+            }
+            if (this.terminalDive) { phase_label = 'TERMINAL'; if (this.terminalPopUp) { targetAlt = 600; pitchCmd = 25 * Math.PI / 180; if (this.alt > 580) this.terminalPopUp = false; } else { const diveAngle = Math.atan2(this.alt, Math.max(1, distToTarget)); pitchCmd = -diveAngle; targetSpeed = CRUISE_SPEED * 1.1; if (distToTarget < 300 || this.alt < 5) { this.createGifExplosion(this.lat, this.lng, Math.hypot(this.vx, this.vy, this.vz)); this.addHistoryMarker(this.lat, this.lng, Math.hypot(this.vx, this.vy, this.vz)); if (this.marker) this.map.removeLayer(this.marker); logMessage(`💥 [M-${this.id}] CRUISE IMPACT | ${this.catalogData.name} | ${distToTarget.toFixed(0)}m CEP`); this.destroy(); return; } } }
+            let altNoise = 0; if (this.cruiseReachedAlt && !this.terminalDive) { altNoise = Math.sin(this.t * 0.31) * 12 + Math.sin(this.t * 0.17 + 1.3) * 7 + Math.sin(this.t * 0.53 + 2.1) * 4; targetAlt = CRUISE_ALT + altNoise; }
+            const maxTurnRate = 0.025; const headingCorr = Math.max(-maxTurnRate, Math.min(maxTurnRate, dAz)) * dt * 60; const newAz = curAz + headingCorr;
+            const speedErr = targetSpeed - vH; const thrustNet = this.config.thrust * (1 + Math.sign(speedErr) * 0.3);
+            const dragF = 0.5 * rho * Math.max(vH, 1) * Math.max(vH, 1) * this.getDragCoeff(vH / SPEED_OF_SOUND, this.config.dragRef) * (Math.PI * (this.config.diam / 2) ** 2);
+            const hAccel = (thrustNet - dragF) / currentMass; const newVH = Math.max(50, vH + hAccel * dt);
+            this.vx = newVH * Math.sin(newAz); this.vy = newVH * Math.cos(newAz);
+            const altErr = targetAlt - this.alt; const vzDesired = Math.max(-80, Math.min(80, altErr * 0.35 + pitchCmd * newVH));
+            this.vz += (vzDesired - this.vz) * Math.min(1, dt / 1.5); this.vz -= G0 * dt; const liftAcc = G0 * (Math.min(1, newVH / CRUISE_SPEED)); this.vz += liftAcc * dt;
+            this.alt += this.vz * dt; if (this.alt < 8) this.alt = 8;
+            this.lat += (this.vy * dt) / 111320; this.lng += (this.vx * dt) / (111320 * Math.cos(this.lat * Math.PI / 180)); this.impactVelocity = Math.hypot(this.vx, this.vy, this.vz);
+            const cruiseIconPhase = !this.cruiseReachedAlt ? 'boost' : (this.terminalDive ? 'reentry' : 'ascent');
+            if (this.marker && this.marker._currentPhase !== cruiseIconPhase) { this.marker._currentPhase = cruiseIconPhase; this.marker.setIcon(this.createMissileIcon(cruiseIconPhase)); }
+            if (this.marker) { this.marker.setLatLng([this.lat, this.lng]); this.updateRotation(); }
+            if (this.t - this.lastLogTime >= 4.0) { this.lastLogTime = this.t; logMessage(`[M-${this.id}] ✈️ T+${this.t.toFixed(0)}s [${phase_label}] ALT:${this.alt.toFixed(0)}m (NOE) SPD:${(this.impactVelocity * 3.6).toFixed(0)}km/h DIST:${(distToTarget / 1000).toFixed(0)}km`); }
+            this.animationId = requestAnimationFrame(() => this.animate()); return;
+        }
+        // ═══════════════════════════════════════════════════
+        // BALLISTIC / HGV PHYSICS — Fully corrected model
+        //
+        // Flight phases:
+        // 1. BOOST (fuel > 0, alt < kickAlt): vertical climb, pitch locked
+        // 2. GRAVITY TURN (fuel > 0, alt > kickAlt): gradually pitch over
+        //    toward velocity vector — the pitch INPUT determines how fast
+        //    and how far the missile arcs:
+        //    • High pitch (lofted 70-85°): slow turn → stays steep → high apogee
+        //    • Standard (40-55°):          moderate turn → classic parabola
+        //    • Low pitch (depressed 15-28°): fast turn → flat trajectory
+        // 3. POST-BURNOUT (fuel = 0): pure ballistic — gravity + drag only
+        //    No thrust, pitch variable irrelevant. Natural parabola.
+        // 4. REENTRY: increasing drag as atmosphere thickens
+        // ═══════════════════════════════════════════════════
+
+        // ── Fuel burn ──
+        // Use realistic burnout time: fuel / (thrust/(isp*G0)) gives actual burn seconds.
+        // We want the sim to match the missile's real burnout altitude/speed,
+        // so we use exact physics: mdot = thrust / (isp * G0)
+        const mdot = this.config.thrust / (this.config.isp * G0);
+        if (this.fuel > 0) {
+            this.fuel -= mdot * dt;
+            if (this.fuel < 0) this.fuel = 0;
+        }
+        const hasFuel = this.fuel > 0;
+        let currentThrust = hasFuel ? this.config.thrust : 0;
+        currentMass = this.fuel + this.dryMass;
+
+        // ── Stage separation ──
+        // Trigger when fuel drops to ≤10% OR at stageSep time (whichever first)
+        if (!this.isSep && (this.fuel <= this.initialFuel * 0.08 || this.t >= this.config.stageSep)) {
+            this.dryMass *= 0.45;  // jettison ~55% of structural mass
+            this.isSep = true;
+        }
+
+        // ── THRUST DIRECTION ──
+        // pitchRad is the CURRENT commanded pitch (elevation above horizontal).
+        // During boost: we want to honor the initial pitch the player set.
+        // Gravity turn: gradually lean pitch toward velocity vector.
+        // After burnout: pitchRad doesn't matter (no thrust).
+
+        let thrustPitch = this.pitchRad; // pitch used for thrust this frame
+
+        if (hasFuel && !this.isHGV) {
+            const vH = Math.hypot(this.vx, this.vy);
+            const vTot3 = Math.hypot(vH, this.vz);
+
+            if (this.alt < this.config.kickAlt) {
+                // ── Phase 1: Vertical / steep boost ──
+                // Keep initial pitch until kickAlt to build vertical velocity.
+                // No gravity turn yet.
+                thrustPitch = this.pitchRad; // locked at initial pitch
+
+            } else {
+                // ── Phase 2: Gravity Turn ──
+                // The INITIAL PITCH controls how quickly and how far the missile
+                // tilts over. This is the core mechanism that differentiates:
+                //   Lofted (pitch 70-85°):  very slow turn rate → stays steep → high apogee
+                //   Standard (pitch 45-55°): moderate turn rate → classic parabola
+                //   Depressed (pitch 15-28°): fast turn → flattens quickly → low flat arc
+                //
+                // Gravity turn rate = function of pitch deviation from velocity vector
+                // The initial pitch sets the "desired" trajectory angle
+                if (vTot3 > 20) {
+                    // Velocity vector pitch angle
+                    const velPitch = Math.atan2(this.vz, vH);
+                    // Target: align thrust with velocity (classic gravity turn)
+                    // BUT: damped by initial pitch — high initial pitch = resist turning
+                    // turnRate: how fast pitch approaches velocity vector
+                    // High pitch (lofted) = slow turn (factor 0.3-0.5)
+                    // Low pitch (depressed) = fast turn (factor 1.5-2.5)
+                    const pitchFactor = Math.max(0.2, Math.min(2.5,
+                        1.5 - (this.initialPitchRad - 0.3) * 1.2   // 30° → 2.1, 55° → 0.84, 80° → 0.24
+                    ));
+                    const turnRate = pitchFactor * 0.015; // rad/s base
+                    const delta = velPitch - this.pitchRad;
+                    this.pitchRad += delta * turnRate * dt * 60; // dt*60 normalizes to ~60fps
+                    // Hard clamps
+                    this.pitchRad = Math.max(5 * Math.PI/180, Math.min(88 * Math.PI/180, this.pitchRad));
+                    thrustPitch = this.pitchRad;
+                }
+            }
+        }
+
+        // ── HGV Skip-Glide ──
+        if (this.isHGV && !hasFuel) {
+            // Skip-glide: oscillate between 30km and 65km, maneuvering unpredictably
+            const targetGlideAlt = 47000 + Math.sin(this.glideOscillation) * 22000;
+            this.glideOscillation += dt * 0.06;   // period ~105s
+            const altError = targetGlideAlt - this.alt;
+            // Lift-like force: pushes toward target glide altitude
+            const liftAcc = altError * 0.0015;
+            this.vz += liftAcc * dt * 60;
+            // Random lateral maneuver kicks (unpredictability)
+            if (this.skipCount < 12 && Math.abs(altError) < 4000) {
+                this.skipCount++;
+                this.vx += (Math.random() - 0.5) * 80;
+                this.vy += (Math.random() - 0.5) * 80;
+            }
+            this.glidePhase = true;
+        }
+
+        // ── Atmospheric density ──
+        const rho = 1.225 * Math.exp(-Math.max(0, this.alt) / 8500);
+
+        // ── Total velocity ──
+        const vTot = Math.hypot(this.vx, this.vy, this.vz) || 0.1;
+        const mach = vTot / SPEED_OF_SOUND;
+
+        // ── Drag force ──
+        const dragF = 0.5 * rho * vTot * vTot
+            * this.getDragCoeff(mach, this.config.dragRef)
+            * (Math.PI * (this.config.diam / 2) ** 2);
+
+        // ── Local gravity (decreases with altitude) ──
+        const gLoc = G0 * Math.pow(EARTH_R / (EARTH_R + this.alt), 2);
+
+        // ── Thrust components (only during powered flight) ──
+        // Thrust is in the plane defined by azimuth and thrustPitch:
+        //   Horizontal component = cos(thrustPitch), decomposed by azimuth
+        //   Vertical component   = sin(thrustPitch)
+        const thrustX = currentThrust * Math.cos(thrustPitch) * Math.sin(this.aziRad);
+        const thrustY = currentThrust * Math.cos(thrustPitch) * Math.cos(this.aziRad);
+        const thrustZ = currentThrust * Math.sin(thrustPitch);
+
+        // ── Drag components (oppose velocity) ──
+        const dragX = dragF * this.vx / vTot;
+        const dragY = dragF * this.vy / vTot;
+        const dragZ = dragF * this.vz / vTot;
+
+        // ── Accelerations ──
+        const ax = (thrustX - dragX) / currentMass;
+        const ay = (thrustY - dragY) / currentMass;
+        const az = (thrustZ - dragZ) / currentMass - gLoc;
+
+        // ── Integrate velocity ──
+        this.vx += ax * dt;
+        this.vy += ay * dt;
+        this.vz += az * dt;
+
+        // ── Integrate position ──
+        this.alt += this.vz * dt;
+        if (this.alt < 0) this.alt = 0;
+        this.lat += (this.vy * dt) / 111320;
+        this.lng += (this.vx * dt) / (111320 * Math.cos(this.lat * Math.PI / 180));
+        if (this.alt > 0) this.impactVelocity = vTot;
+
+        // ── Visual update ──
+        const phase = this.getMissilePhase();
+        if (this.marker && this.marker._currentPhase !== phase) {
+            this.marker._currentPhase = phase;
+            this.marker.setIcon(this.createMissileIcon(phase));
+        }
+        if (this.marker) { this.marker.setLatLng([this.lat, this.lng]); this.updateRotation(); }
+
+        // ── Telemetry log ──
+        if (this.t - this.lastLogTime >= 2.0) {
+            this.lastLogTime = this.t;
+            const label = this.isHGV && this.glidePhase ? '[GLIDE]' : phase.toUpperCase();
+            const pitchDeg = (this.pitchRad * 180 / Math.PI).toFixed(0);
+            const vHoriz = Math.hypot(this.vx, this.vy).toFixed(0);
+            if (this.t > 0) logMessage(`[M-${this.id}] T+${this.t.toFixed(0)}s ${label} ALT:${(this.alt/1000).toFixed(1)}km M:${mach.toFixed(1)} vH:${vHoriz}m/s pitch:${pitchDeg}° ${hasFuel?'[BOOST]':'[COAST]'}`);
+        }
+
+        // ── Impact detection ──
+        if (this.alt <= 0 && this.t > 1.5) {
+            const dist = this.map.distance([this.lat, this.lng], [this.targetLat, this.targetLng]);
+            this.createGifExplosion(this.lat, this.lng, this.impactVelocity);
+            this.addHistoryMarker(this.lat, this.lng, this.impactVelocity);
+            if (this.marker && this.map && this.map.hasLayer(this.marker)) this.map.removeLayer(this.marker);
+            logMessage(`💥 [M-${this.id}] IMPACT | ${this.catalogData.name} | V:${(this.impactVelocity*3.6).toFixed(0)}km/h | CEP:${dist.toFixed(0)}m`);
+            this.destroy(); return;
+        }
+        this.animationId = requestAnimationFrame(() => this.animate());
+    }
+    launch() { this.marker = L.marker([this.launchLat, this.launchLng], { icon: this.createMissileIcon('boost'), interactive: false, zIndexOffset: 1000 + this.id }).addTo(this.map); logMessage(`🚀 LAUNCHED: ${this.catalogData.name} | ${this.catalogData.maxMach} | Pitch:${(this.pitchRad * 180 / Math.PI).toFixed(1)}°`); this.animate(); }
+    destroy() { this.isActive = false; if (this.animationId) cancelAnimationFrame(this.animationId); if (this.marker && this.map && this.map.hasLayer(this.marker)) this.map.removeLayer(this.marker); const idx = activeMissiles.findIndex(m => m.id === this.id); if (idx !== -1) activeMissiles.splice(idx, 1); updateCounters(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UI FUNCTIONS (build cards, select, filter) - sama seperti Rev24
+// ═══════════════════════════════════════════════════════════════
+function buildMissileCards(filter = 'ALL') { const container = document.getElementById('missileCards'); container.innerHTML = ''; for (const [id, m] of Object.entries(MISSILE_CATALOG)) { if (filter !== 'ALL' && m.category !== filter) continue; const card = document.createElement('div'); card.className = 'missile-card' + (id === selectedMissileId ? ' selected' : ''); card.onclick = () => selectMissile(id); card.innerHTML = `<div class="card-header"><span class="card-name">${m.emoji} ${m.name}</span><span class="card-threat threat-${m.threat}">${m.threat}</span></div><div class="card-sub">${m.origin} &nbsp;|&nbsp; ${m.category} &nbsp;|&nbsp; Max: ${m.maxRange} / ${m.maxMach}</div><div class="card-info">${m.info}</div><div style="font-size:8px;color:#4a8a5a;margin-top:3px;">⚔️ <b>Tactic:</b> ${m.tactics}</div><div class="card-counters"><span style="font-size:7px;color:#4a6a7a;">Counterable by:</span>${m.vulnerableTo.map(v => `<span class="counter-tag">${DEFENSE_SYSTEMS[v]?.name?.split(' ')[0] || v}</span>`).join('')}</div><div style="font-size:7px;margin-top:3px;">🎯 Ammo: ${m.ammo} missiles</div>`; container.appendChild(card); } updateLockedSpecs(); }
+function buildDefenseCards() { const container = document.getElementById('defenseCards'); container.innerHTML = ''; for (const [id, d] of Object.entries(DEFENSE_SYSTEMS)) { const card = document.createElement('div'); card.className = 'defense-card' + (id === selectedDefenseId ? ' selected' : ''); card.onclick = () => selectDefense(id); card.innerHTML = `<div class="def-header"><span class="def-name">${d.emoji} ${d.name}</span><span class="def-tier tier-${d.tier}">TIER ${d.tier}</span></div><div class="def-sub">${d.origin} &nbsp;|&nbsp; Range: ${(d.engagementRange / 1000).toFixed(0)}km &nbsp;|&nbsp; Ammo: ${d.ammo} &nbsp;|&nbsp; Hit rate: ${Math.round(d.baseSuccessRate * 100)}%</div><div class="def-info">${d.info}</div><div style="font-size:8px;color:#7a4a4a;margin-top:3px;">⚠️ <b>Weakness:</b> ${d.weaknesses}</div><div class="def-targets"><span style="font-size:7px;color:#4a6a7a;">Engages:</span>${d.canIntercept.map(t => `<span class="target-tag">${t}</span>`).join('')}</div>`; container.appendChild(card); } }
+function filterMissiles(cat) { document.querySelectorAll('.missile-tab').forEach(t => t.classList.remove('active')); event.target.classList.add('active'); buildMissileCards(cat); }
+function selectMissile(id) {
+    selectedMissileId = id;
+    const m = MISSILE_CATALOG[id];
+    const pitchEl = document.getElementById('pitch');
+    const pitchLabel = document.getElementById('pitchModeLabel');
+    // Cruise missile: pitch AKTIF sebagai tantangan — mengontrol cruise altitude
+    pitchEl.value = m.defaultPitch;
+    pitchEl.readOnly = false;
+    pitchEl.style.color = '';
+    pitchLabel.textContent = m.isCruise ? 'CRUISE-ALT' : 'MANUAL';
+    pitchLabel.style.color = m.isCruise ? '#44ccff' : '#ffaa44'; 
+    buildMissileCards(document.querySelector('.missile-tab.active').textContent.trim()); 
+    updateLockedSpecs(); 
+    logMessage(`🚀 Selected: ${m.name} | Ammo: ${m.ammo} | ${m.maxRange} | ${m.maxMach}`);
+    // Point 1: TIDAK mengubah launcher yang sudah ada — setiap launcher terkunci ke rudal saat dibuat
+    // Ganti rudal = tambah launcher BARU (lihat ADD LAUNCHER)
+    if (targetPos) { 
+        let siagaLauncher = launcherUnits.find(u => u.state === 'siaga' && u.pos);
+        if (siagaLauncher) { const distKm = map.distance(siagaLauncher.pos, targetPos) / 1000; updateAutoPitchPanel(distKm); } 
+    }
+    // Update ADD LAUNCHER button label to show which missile will be placed next
+    const addBtn = document.getElementById('addLauncherBtn');
+    if (addBtn) addBtn.textContent = `➕ ADD: ${m.emoji} ${m.name.split('(')[0].trim()} (tap map)`;
+}
+function selectDefense(id) { 
+    selectedDefenseId = id; 
+    const d = DEFENSE_SYSTEMS[id]; 
+    buildDefenseCards(); 
+    logMessage(`🛡️ Selected: ${d.name} | Ammo: ${d.ammo}`); 
+    for (let unit of defenseUnits) {
+        unit.maxAmmo = d.ammo;
+        if (!unit.reloading) unit.ammo = unit.maxAmmo;
+        unit.updatePopup();
+        if (unit.resolvedBattery) {
+            unit.resolvedBattery.system = d;
+            unit.resolvedBattery.ammo = unit.ammo;
+            unit.resolvedBattery.maxAmmo = unit.maxAmmo;
+            unit.resolvedBattery.updateMarker();
+        }
+    }
+}
+function updateLockedSpecs() { const m = MISSILE_CATALOG[selectedMissileId]; if (!m) return; document.getElementById('specsGrid').innerHTML = `<div class="spec-item"><b>${(m.thrust / 1000).toFixed(0)} kN</b>Thrust</div><div class="spec-item"><b>${m.isp} s</b>Isp (Vac)</div><div class="spec-item"><b>${m.fuel} kg</b>Propellant</div><div class="spec-item"><b>${m.dryMass} kg</b>Dry Mass</div><div class="spec-item"><b>${m.diam} m</b>Diameter</div><div class="spec-item"><b>${m.dragRef}</b>Drag Cd</div>`; }
+async function fetchRoute(startLat, startLng, endLat, endLng) { 
+    const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`; 
+    try { const response = await fetch(url); const data = await response.json(); if (data.code === 'Ok' && data.routes.length > 0) { const polyline = data.routes[0].geometry; return decodePolyline(polyline); } } catch (e) { console.warn('OSRM gagal, fallback ke garis lurus', e); } return null; 
+}
+function decodePolyline(encoded) { 
+    let points = []; let index = 0, lat = 0, lng = 0; 
+    while (index < encoded.length) { 
+        let b, shift = 0, result = 0; do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20); 
+        let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1)); lat += dlat; 
+        shift = 0; result = 0; do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20); 
+        let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1)); lng += dlng; 
+        points.push([lat * 1e-5, lng * 1e-5]); 
+    } 
+    return points; 
+}
+function initMap() { 
+    map = L.map('map', { zoomControl: true, dragging: true, scrollWheelZoom: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, preferCanvas: false }).setView([20, 60], 3); 
+    initTileLayer(); 
+    map.zoomControl.setPosition('bottomright'); 
+    map.on('zoomstart', () => { document.getElementById('map').style.filter = 'brightness(0.85) contrast(1.1)'; }); 
+    map.on('zoomend', () => { document.getElementById('map').style.filter = 'brightness(0.9) contrast(1.15) saturate(0.8)'; }); 
+    // Desktop: invalidate size on window resize
+    window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
+    // map.on('click') diatur oleh facility system di bawah
+    map.on('click', e => {
+        if(e.originalEvent&&e.originalEvent.target?.closest?.('.leaflet-popup'))return;
+        if(addUnitMode){handleAddUnitClick(e.latlng);return;}
+        if(routePickingForUnit){handleRoutePickingClick(e.latlng);return;}
+    });
+}
+function createTargetMarker() { const div = document.createElement('div'); div.className = 'target-marker'; div.innerHTML = `<div class="death-ring"></div><div class="death-core"></div><div class="skull-icon">💀</div>`; return L.divIcon({ className: 'tactical-marker', html: div.outerHTML, iconSize: [28, 28], iconAnchor: [14, 14] }); }
+function addDefenseBattery(lat, lng, mobileUnit) { const b = new DefenseBattery(lat, lng, selectedDefenseId, map, mobileUnit); defenseBatteries.push(b); updateCounters(); return b; }
+function resetMission() { 
+    for (const m of activeMissiles) { m.isActive = false; if (m.animationId) cancelAnimationFrame(m.animationId); if (m.marker && map && map.hasLayer(m.marker)) try { map.removeLayer(m.marker); } catch(e) {} } activeMissiles = []; 
+    for (const i of activeInterceptors) i.destroy(); activeInterceptors = []; 
+    for (const b of defenseBatteries) b.remove(); defenseBatteries = []; 
+    for (const u of launcherUnits) u.remove(); launcherUnits = [];
+    for (const u of defenseUnits) u.remove(); defenseUnits = [];
+    if (targetMarker && map && map.hasLayer(targetMarker)) map.removeLayer(targetMarker);
+    targetMarker = null; targetPos = null; waitingForNewTarget = false;
+    // Bersihkan semua per-launcher target marker
+    for (const u of launcherUnits) {
+        if (u._targetMarker && map && map.hasLayer(u._targetMarker)) map.removeLayer(u._targetMarker);
+        u._targetMarker = null; u.targetPos = null;
+    } 
+    for (const m of impactMarkers) { if (map && map.hasLayer(m)) try { map.removeLayer(m); } catch(e) {} } impactMarkers = []; 
+    for (const m of historyMarkers) { if (map && map.hasLayer(m)) try { map.removeLayer(m); } catch(e) {} } historyMarkers = []; 
+    cancelRoutePicking(); if (addUnitMode) { addUnitMode = null; map.getContainer().classList.remove('route-picking-cursor'); }
+    updateStatus('STANDBY', false); updateCounters(); logMessage('> ALL SYSTEMS RESET — Rev31 Warehouse+Cooldown'); 
+}
+function updateDefenseSystems(t) { for (const b of defenseBatteries) { if (b.isActive) b.scanAndEngage(t, activeMissiles); } }
+function gameLoop() { const now = performance.now() / 1000; updateDefenseSystems(now); requestAnimationFrame(() => gameLoop()); }
+// keepCurrentTarget dan clearTargetForNew dihapus — target kini per-launcher via popup
+// Hapus SEMUA target dari semua launcher sekaligus
+function clearAllLauncherTargets() {
+    launcherUnits.forEach(u => {
+        if (u._targetMarker && map && map.hasLayer(u._targetMarker)) map.removeLayer(u._targetMarker);
+        u._targetMarker = null;
+        u.targetPos = null;
+        u.updatePopup();
+    });
+    if (targetMarker && map && map.hasLayer(targetMarker)) map.removeLayer(targetMarker);
+    targetMarker = null; targetPos = null;
+    logMessage('🗑️ Semua target dihapus');
+    updateStatus('STANDBY', false);
+}
+
+// ── Desktop Sidebar & UI (no toggle needed — always visible) ──
+const sidebar = document.getElementById('sidebar');
+// Desktop: sidebar always open, no toggle logic needed
+function openMenu() {}
+function closeMenu() {}
+function toggleMenu() {}
+
+// Keyboard shortcuts (desktop)
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return; // don't fire when typing
+    switch(e.key.toLowerCase()) {
+        case 'l': startAddUnit('launcher'); break;
+        case 'd': startAddUnit('defense'); break;
+        case 'r': if(confirm('Reset semua misi?')) resetMission(); break;
+        case 'm': toggleMapMode(); break;
+        case 'escape':
+            if(addUnitMode){ addUnitMode=null; map.getContainer().classList.remove('route-picking-cursor'); updateStatus('ARMED',false); }
+            if(routePickingForUnit) cancelRoutePicking();
+            if(setTargetForUnitId) cancelSetTarget();
+            break;
+    }
+});
+
+document.getElementById('addLauncherBtn').addEventListener('click', () => startAddUnit('launcher'));
+document.getElementById('addDefenseBtn').addEventListener('click', () => startAddUnit('defense'));
+document.getElementById('toggleMapModeBtn').addEventListener('click', toggleMapMode);
+
+// ── Desktop: Sidebar resizable via drag ──
+(function initSidebarResize() {
+    const sidebarEl = document.getElementById('sidebar');
+    // Inject resize handle
+    const handle = document.createElement('div');
+    handle.id = 'sidebar-resize';
+    handle.title = 'Drag to resize panel';
+    handle.style.cssText = 'position:absolute;top:0;right:0;width:5px;height:100%;cursor:col-resize;z-index:200;background:transparent;transition:background .15s;';
+    handle.addEventListener('mouseenter', () => handle.style.background = 'rgba(0,170,255,0.2)');
+    handle.addEventListener('mouseleave', () => { if (!resizing) handle.style.background = 'transparent'; });
+    sidebarEl.style.position = 'relative';
+    sidebarEl.appendChild(handle);
+
+    let resizing = false, startX = 0, startW = 0;
+    handle.addEventListener('mousedown', e => {
+        resizing = true; startX = e.clientX; startW = sidebarEl.offsetWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        handle.style.background = 'rgba(0,170,255,0.35)';
+    });
+    document.addEventListener('mousemove', e => {
+        if (!resizing) return;
+        const newW = Math.max(280, Math.min(600, startW + (e.clientX - startX)));
+        sidebarEl.style.width = newW + 'px';
+        sidebarEl.style.minWidth = newW + 'px';
+        sidebarEl.style.maxWidth = newW + 'px';
+        document.documentElement.style.setProperty('--sidebar-w', newW + 'px');
+        if (typeof map !== 'undefined' && map) map.invalidateSize();
+    });
+    document.addEventListener('mouseup', () => {
+        if (!resizing) return;
+        resizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        handle.style.background = 'transparent';
+        if (typeof map !== 'undefined' && map) map.invalidateSize();
+    });
+})();
+
+initMap(); buildMissileCards('ALL'); buildDefenseCards(); selectMissile('SCUD_D'); selectDefense('IRON_DOME'); gameLoop(); 
+logMessage('════════════════════════════════════'); 
+logMessage('🖥️ BALLISTIC STRIKE 2026 Rev32 — DESKTOP EDITION'); 
+logMessage('⌨️  Keyboard: L=Launcher D=Defense R=Reset M=Map ESC=Cancel');
+logMessage('⚛️ [P1] Ganti rudal = ADD LAUNCHER baru (truck terkunci per rudal)'); 
+logMessage('⛽ [P2] BBM berkurang tiap km — isi ulang dari Kilang Minyak'); 
+logMessage('💀 [P3/P4] Fasilitas hancur hilang dari peta | GIF api auto-hapus 60s'); 
+logMessage('🏗️ [P5] Bangun semua fasilitas wajib sebelum launch/defense aktif'); 
+logMessage('════════════════════════════════════');
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SISTEM GUDANG AMUNISI (Rev31)
+//  Pabrik → produksi ke Gudang (bukan ke vehicle langsung)
+//  Build time: 10 menit / batch (600 detik real = bisa disesuaikan)
+//  Vehicle reload: ambil dari gudang (1 menit) → stok gudang berkurang
+// ══════════════════════════════════════════════════════════════════
+
+// ── Global warehouse objects (singleton per type) ──
+let missileWarehouse = null;     // satu-satunya gudang rudal
+let interceptorWarehouse = null; // satu-satunya gudang interceptor
+
+function getMissileWarehouse()     { return missileWarehouse; }
+function getInterceptorWarehouse() { return interceptorWarehouse; }
+
+const WAREHOUSE_BUILD_TIME = 600;  // detik real per batch produksi (10 menit)
+const WAREHOUSE_BATCH_SIZE = 4;    // jumlah ammo per batch produksi
+const WAREHOUSE_MAX_STOCK  = 24;   // kapasitas gudang
+
+class AmmoWarehouse {
+    constructor(type, lat, lng) {
+        this.type = type; // 'missile' or 'interceptor'
+        this.lat = lat; this.lng = lng;
+        this.stock = 0;           // stok saat ini
+        this.maxStock = WAREHOUSE_MAX_STOCK;
+        this.producing = false;
+        this.prodEndTime = 0;
+        this.marker = null;
+        this._drawMarker();
+        logMessage(`🏭 Gudang ${type==='missile'?'Rudal':'Interceptor'} dibangun di ${lat.toFixed(3)},${lng.toFixed(3)}`);
+    }
+
+    startProduction() {
+        if (this.producing) return;
+        if (this.stock >= this.maxStock) {
+            logMessage(`📦 Gudang ${this.type==='missile'?'Rudal':'Interceptor'} PENUH (${this.stock}/${this.maxStock})`);
+            return;
+        }
+        // Cek apakah pabrik masih hidup
+        const factoryAlive = this.type==='missile' ? FAC_FX.missileFactory : FAC_FX.interceptorFactory;
+        if (!factoryAlive) {
+            logMessage(`⚠️ Pabrik ${this.type==='missile'?'Rudal':'Interceptor'} hancur! Tidak bisa produksi.`);
+            return;
+        }
+        this.producing = true;
+        this.prodEndTime = Date.now() + WAREHOUSE_BUILD_TIME * 1000;
+        this._drawMarker();
+        logMessage(`⚙️ Gudang ${this.type==='missile'?'Rudal':'Interceptor'} memproduksi ${WAREHOUSE_BATCH_SIZE} ammo — selesai dalam ${WAREHOUSE_BUILD_TIME}s`);
+
+        const timer = setInterval(() => {
+            if (!this.producing) { clearInterval(timer); return; }
+            if (Date.now() >= this.prodEndTime) {
+                this.producing = false;
+                const added = Math.min(WAREHOUSE_BATCH_SIZE, this.maxStock - this.stock);
+                this.stock += added;
+                logMessage(`✅ Gudang ${this.type==='missile'?'Rudal':'Interceptor'}: +${added} ammo | Stok: ${this.stock}/${this.maxStock}`);
+                this._drawMarker();
+                _updateWarehouseUI();
+                clearInterval(timer);
+                // Auto-start next batch jika belum penuh & pabrik masih hidup
+                setTimeout(() => this.startProduction(), 100);
+            } else {
+                this._drawMarker(); // update timer display
+            }
+        }, 5000); // update tiap 5 detik
+    }
+
+    _drawMarker() {
+        const col = this.type === 'missile' ? '#ff8844' : '#44aaff';
+        const stockPct = this.stock / this.maxStock;
+        const barW = Math.round(stockPct * 36);
+        const prodRem = this.producing ? Math.max(0, Math.ceil((this.prodEndTime - Date.now())/1000)) : 0;
+        const prodBar = this.producing
+            ? `<div style="font-size:7px;color:#ffcc00;">⚙️ ${prodRem}s</div>`
+            : (this.stock < this.maxStock ? `<div style="font-size:7px;color:#4a6a7a;">Idle</div>` : `<div style="font-size:7px;color:#44ff44;">PENUH</div>`);
+        const html = `
+<div style="position:relative;width:52px;">
+  <div style="background:${col}22;border:2px solid ${col};border-radius:6px;padding:4px 6px;text-align:center;">
+    <div style="font-size:10px;">${this.type==='missile'?'🚀':'🛡️'}</div>
+    <div style="font-size:8px;color:#fff;font-weight:bold;">GUDANG</div>
+    <div style="font-size:9px;color:${col};">${this.stock}/${this.maxStock}</div>
+    <div style="width:36px;height:4px;background:#333;border-radius:2px;margin:2px auto;">
+      <div style="width:${barW}px;height:4px;background:${stockPct>0.5?'#44ff44':stockPct>0.2?'#ffaa44':'#ff4444'};border-radius:2px;"></div>
+    </div>
+    ${prodBar}
+  </div>
+  <div style="position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font-size:7px;white-space:nowrap;background:rgba(0,0,0,.85);color:${col};padding:1px 4px;border-radius:2px;">
+    ${this.type==='missile'?'Gudang Rudal':'Gudang Interseptor'}
+  </div>
+</div>`;
+        const icon = L.divIcon({ className:'', html, iconSize:[52,72], iconAnchor:[26,26] });
+        if (this.marker && map.hasLayer(this.marker)) map.removeLayer(this.marker);
+        this.marker = L.marker([this.lat, this.lng], {icon, zIndexOffset:450, interactive:true}).addTo(map);
+        this.marker.bindTooltip(
+            `${this.type==='missile'?'🚀 Gudang Rudal':'🛡️ Gudang Interceptor'}\nStok: ${this.stock}/${this.maxStock}\n${this.producing?'⚙️ Produksi: '+prodRem+'s':'Idle — klik marker untuk mulai produksi'}`,
+            {direction:'top'}
+        );
+        this.marker.on('click', (e) => { L.DomEvent.stopPropagation(e); this.startProduction(); this._drawMarker(); });
+        this.marker.on('touchend', (e) => { L.DomEvent.stopPropagation(e); this.startProduction(); this._drawMarker(); });
+    }
+    updateMarker() { this._drawMarker(); }
+
+    remove() {
+        if (this.marker && map.hasLayer(this.marker)) map.removeLayer(this.marker);
+        this.marker = null;
+    }
+}
+
+// ── UI update warehouses ──
+function _updateWarehouseUI() {
+    const mEl = document.getElementById('whMissileInfo');
+    const iEl = document.getElementById('whInterceptorInfo');
+    if (mEl) mEl.innerHTML = missileWarehouse
+        ? `Stok: <b style="color:#ff8844">${missileWarehouse.stock}/${missileWarehouse.maxStock}</b> ${missileWarehouse.producing?'⚙️':'📦'}`
+        : '<span style="color:#4a6a7a">Belum dibangun</span>';
+    if (iEl) iEl.innerHTML = interceptorWarehouse
+        ? `Stok: <b style="color:#44aaff">${interceptorWarehouse.stock}/${interceptorWarehouse.maxStock}</b> ${interceptorWarehouse.producing?'⚙️':'📦'}`
+        : '<span style="color:#4a6a7a">Belum dibangun</span>';
+}
+
+// ── Mode penempatan gudang (injected into facility click system) ──
+let pendingWarehouseType = null;
+
+function startBuildWarehouse(type) {
+    const existing = type === 'missile' ? missileWarehouse : interceptorWarehouse;
+    if (existing) {
+        logMessage(`⚠️ Gudang ${type==='missile'?'Rudal':'Interceptor'} sudah ada!`);
+        existing.startProduction();
+        return;
+    }
+    pendingWarehouseType = type;
+    map.getContainer().classList.add('route-picking-cursor');
+    logMessage(`📍 Klik peta untuk bangun Gudang ${type==='missile'?'Rudal':'Interceptor'}`);
+    updateStatus(`📍 TAP PETA: GUDANG ${type.toUpperCase()}`, false);
+}
+
+// ── Hook ke facility click handler ──
+// Ini dipanggil sebelum pendingFacType check di map.on('click')
+function _handleWarehouseClick(latlng) {
+    if (!pendingWarehouseType) return false;
+    const type = pendingWarehouseType;
+    pendingWarehouseType = null;
+    map.getContainer().classList.remove('route-picking-cursor');
+    updateStatus('ARMED', false);
+    const wh = new AmmoWarehouse(type, latlng.lat, latlng.lng);
+    if (type === 'missile') missileWarehouse = wh;
+    else interceptorWarehouse = wh;
+    _updateWarehouseUI();
+    // Auto-start produksi pertama
+    setTimeout(() => wh.startProduction(), 500);
+    return true;
+}
+
+// ── Patch _facProduction: hapus direct fill ke vehicle ──
+// Pabrik sekarang hanya men-trigger startProduction di gudang,
+// BUKAN langsung mengisi ammo ke vehicle
+function _facProductionV2(nowSec) {
+    // Tidak ada produksi langsung ke vehicle lagi
+    // Gudang sudah self-managing dengan startProduction loop
+    // Fungsi ini tetap ada sebagai hook tapi kosong
+}
+// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  SISTEM FASILITAS STRATEGIS & INDUSTRI (Rev31 — dari DeepSeek AI)
+//  Pemain menempatkan fasilitas di mana saja via klik peta.
+//  Setiap fasilitas punya efek gameplay saat dihancurkan rudal.
+// ══════════════════════════════════════════════════════════════════
+
+// ── Template fasilitas (tanpa koordinat tetap) ──
+const STRATEGIC_TEMPLATES = [
+    { id:'oil_refinery',    name:'🛢️ Kilang Minyak',       type:'oil',      maxHp:1200, effectDesc:'Kecepatan launcher turun drastis (BBM habis)' },
+    { id:'military_barracks',name:'🏚️ Markas Militer',     type:'barracks', maxHp:800,  effectDesc:'Reload interceptor +100% lebih lama' },
+    { id:'power_plant',     name:'⚡ Pembangkit Listrik',  type:'power',    maxHp:1000, effectDesc:'Jangkauan radar & intercept defense -50%' },
+    { id:'command_center',  name:'📡 Pusat Komando',       type:'command',  maxHp:900,  effectDesc:'Azimuth launch terganggu ±15° acak' },
+    { id:'capital_city',    name:'🏙️ CAPITAL CITY',        type:'capital',  maxHp:5000, effectDesc:'💀 GAME OVER jika hancur!' }
+];
+const INDUSTRIAL_TEMPLATES = [
+    { id:'missile_factory',     name:'🏭 Pabrik Rudal',       type:'missile',     maxHp:800, prodInterval:20, ammoPerCycle:1 },
+    { id:'interceptor_factory', name:'🏭 Pabrik Interceptor',  type:'interceptor', maxHp:800, prodInterval:20, ammoPerCycle:1 }
+];
+
+// ── State fasilitas global ──
+let facilities = [], industrialFacilities = [];
+let facGameOver = false, lastFacProdTime = 0;
+let pendingFacType = null, pendingFacTemplate = null;
+// Efek status
+const FAC_FX = { oil:false, barracks:false, power:false, command:false, capital:false, missileFactory:true, interceptorFactory:true };
+
+// ── Class StrategicFacility ──
+class StrategicFacility {
+    constructor(tmpl, lat, lng) {
+        this.id=tmpl.id+'_'+Date.now(); this.name=tmpl.name; this.type=tmpl.type;
+        this.lat=lat; this.lng=lng; this.maxHp=tmpl.maxHp; this.hp=this.maxHp;
+        this.destroyed=false; this.marker=null; this._drawMarker();
+    }
+    _color(){ const p=this.hp/this.maxHp; return p>0.6?'#44cc44':p>0.3?'#ffaa44':'#ff4444'; }
+    _drawMarker(){
+        const col={oil:'#ff8844',barracks:'#aa6644',power:'#44aaff',command:'#aa44ff',capital:'#ff2200'}[this.type]||'#ffaa44';
+        const icon=L.divIcon({className:'',html:`<div style="position:relative;width:40px;height:40px;background:${this.destroyed?'#333':col};border-radius:50%;border:2px solid ${this.destroyed?'#555':'#fff'};display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 8px rgba(0,0,0,.5);">${this.destroyed?'💀':this.name.split(' ')[0]}<div style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;white-space:nowrap;">${this.destroyed?'HANCUR':'❤️'+this.hp}</div></div>`,iconSize:[40,58],iconAnchor:[20,20]});
+        if(this.marker&&map.hasLayer(this.marker))map.removeLayer(this.marker);
+        this.marker=L.marker([this.lat,this.lng],{icon,zIndexOffset:400,interactive:true}).addTo(map);
+        this.marker.bindTooltip(`${this.name}
+❤️ ${this.hp}/${this.maxHp}${this.destroyed?' (HANCUR)':''}`,{direction:'top'});
+    }
+    takeDamage(amt){
+        if(this.destroyed)return;
+        this.hp=Math.max(0,this.hp-amt);
+        this._drawMarker();
+        logMessage(`💥 ${this.name} terkena damage! HP: ${this.hp}/${this.maxHp}`);
+        if(this.hp<=0)this._destroy();
+    }
+    _destroy(){
+        this.destroyed=true;
+        logMessage(`🔥 ${this.name} HANCUR! Efek: ${STRATEGIC_TEMPLATES.find(t=>t.type===this.type)?.effectDesc||''}`);
+        FAC_FX[this.type]=true;
+        if(this.type==='capital'){ facGameOver=true; updateStatus('💀 GAME OVER — CAPITAL HANCUR',true); logMessage('💀 GAME OVER: Capital City hancur!'); }
+        // Point 3: Hapus marker dari peta saat hancur
+        if(this.marker&&map.hasLayer(this.marker)){ map.removeLayer(this.marker); this.marker=null; }
+        _applyFacEffects(); _updateFacUI();
+    }
+}
+
+// ── Class IndustrialFacility ──
+class IndustrialFacility {
+    constructor(tmpl, lat, lng){
+        this.id=tmpl.id+'_'+Date.now(); this.name=tmpl.name; this.type=tmpl.type;
+        this.lat=lat; this.lng=lng; this.maxHp=tmpl.maxHp; this.hp=this.maxHp;
+        this.prodInterval=tmpl.prodInterval; this.ammoPerCycle=tmpl.ammoPerCycle;
+        this.destroyed=false; this.marker=null; this._drawMarker();
+    }
+    _drawMarker(){
+        const col=this.type==='missile'?'#ff8844':'#44aaff';
+        const icon=L.divIcon({className:'',html:`<div style="position:relative;width:40px;height:40px;background:${this.destroyed?'#333':col};border-radius:50%;border:2px solid ${this.destroyed?'#555':'#fff'};display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 8px rgba(0,0,0,.5);">${this.destroyed?'💀':this.type==='missile'?'🚀':'🛡️'}<div style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;white-space:nowrap;">${this.destroyed?'HANCUR':'❤️'+this.hp}</div></div>`,iconSize:[40,58],iconAnchor:[20,20]});
+        if(this.marker&&map.hasLayer(this.marker))map.removeLayer(this.marker);
+        this.marker=L.marker([this.lat,this.lng],{icon,zIndexOffset:400,interactive:true}).addTo(map);
+        this.marker.bindTooltip(`${this.name}
+❤️ ${this.hp}/${this.maxHp}
++${this.ammoPerCycle} ammo/${this.prodInterval}s${this.destroyed?' (HANCUR)':''}`,{direction:'top'});
+    }
+    takeDamage(amt){
+        if(this.destroyed)return;
+        this.hp=Math.max(0,this.hp-amt);
+        this._drawMarker();
+        logMessage(`💥 ${this.name} damage! HP: ${this.hp}/${this.maxHp}`);
+        if(this.hp<=0)this._destroy();
+    }
+    _destroy(){
+        this.destroyed=true;
+        if(this.type==='missile') FAC_FX.missileFactory=false;
+        else FAC_FX.interceptorFactory=false;
+        logMessage(`🔥 ${this.name} HANCUR! Produksi berhenti.`);
+        // Point 3: Hapus marker dari peta saat hancur
+        if(this.marker&&map.hasLayer(this.marker)){ map.removeLayer(this.marker); this.marker=null; }
+        _updateIndUI();
+    }
+}
+
+// ── Efek global ──
+function _applyFacEffects(){
+    launcherUnits.forEach(u=>{ u.speedKph=FAC_FX.oil?8:60; });
+    defenseBatteries.forEach(b=>{
+        const sys=DEFENSE_SYSTEMS[b.type];
+        b.system.reloadTime=FAC_FX.barracks?(sys.reloadTime*2):sys.reloadTime;
+        const rScale=FAC_FX.power?0.5:1;
+        b.radarRange=sys.radarRange*rScale; b.engagementRange=sys.engagementRange*rScale;
+        if(b.radarCircle)b.radarCircle.setRadius(b.radarRange);
+        if(b.engageCircle)b.engageCircle.setRadius(b.engagementRange);
+    });
+}
+
+// ── Produksi amunisi tiap 20 detik ──
+function _facProduction(nowSec){
+    if(!lastFacProdTime)lastFacProdTime=nowSec;
+    if(nowSec-lastFacProdTime<20)return;
+    lastFacProdTime=nowSec;
+    if(FAC_FX.missileFactory){
+        launcherUnits.forEach(u=>{ if(u.ammo<u.maxAmmo&&!u.reloading){u.ammo=Math.min(u.maxAmmo,u.ammo+1);u.updatePopup();} });
+        logMessage('🏭 Pabrik Rudal: +1 ammo ke semua launcher');
+    }
+    if(FAC_FX.interceptorFactory){
+        defenseUnits.forEach(u=>{ if(u.ammo<u.maxAmmo&&!u.reloading){u.ammo=Math.min(u.maxAmmo,u.ammo+1);u.updatePopup();} });
+        logMessage('🏭 Pabrik Interceptor: +1 ammo ke semua defense');
+    }
+}
+
+// ── Damage dari impact ──
+function _damageNearbyFacilities(lat,lng,vel){
+    const dmg=Math.min(800,Math.max(200,vel/10));
+    [...facilities,...industrialFacilities].forEach(f=>{ if(!f.destroyed&&map.distance([lat,lng],[f.lat,f.lng])<600)f.takeDamage(dmg); });
+}
+
+// ── UI update ──
+function _updateFacUI(){
+    const el=document.getElementById('facList'); if(!el)return;
+    el.innerHTML=facilities.map(f=>`<div style="display:flex;justify-content:space-between;font-size:9px;padding:3px 0;border-bottom:1px solid #1e3a5f;"><span>${f.name}</span><span style="color:${f.destroyed?'#ff4444':'#44ff44'};">${f.destroyed?'💀 HANCUR':'❤️'+f.hp+'/'+f.maxHp}</span></div>`).join('')||'<div style="font-size:9px;color:#4a6a7a;">Belum ada fasilitas</div>';
+}
+function _updateIndUI(){
+    const el=document.getElementById('indList'); if(!el)return;
+    el.innerHTML=industrialFacilities.map(f=>`<div style="display:flex;justify-content:space-between;font-size:9px;padding:3px 0;border-bottom:1px solid #1e3a5f;"><span>${f.name}</span><span style="color:${f.destroyed?'#ff4444':'#44ff44'};">${f.destroyed?'💀':'⚡'}${f.destroyed?'HANCUR':f.hp+'/'+f.maxHp}</span></div>`).join('')||'<div style="font-size:9px;color:#4a6a7a;">Belum ada fasilitas</div>';
+}
+
+// ── Penempatan interaktif ──
+function startPlaceFacility(type,tmpl){
+    pendingFacType=type; pendingFacTemplate=tmpl;
+    map.getContainer().classList.add('route-picking-cursor');
+    logMessage(`📍 Klik peta untuk tempatkan ${tmpl.name}`);
+    updateStatus(`📍 TAP PETA: ${tmpl.name}`,false);
+}
+function _handleFacClick(latlng){
+    if(!pendingFacType||!pendingFacTemplate)return false;
+    if(pendingFacType==='strategic'){
+        const f=new StrategicFacility(pendingFacTemplate,latlng.lat,latlng.lng);
+        facilities.push(f);
+        if(f.type==='capital')logMessage('⚠️ Capital City ditempatkan — hancur = GAME OVER!');
+    } else {
+        const f=new IndustrialFacility(pendingFacTemplate,latlng.lat,latlng.lng);
+        industrialFacilities.push(f);
+    }
+    pendingFacType=null; pendingFacTemplate=null;
+    map.getContainer().classList.remove('route-picking-cursor');
+    updateStatus('ARMED',false);
+    _updateFacUI(); _updateIndUI();
+    logMessage(`✅ Fasilitas ditempatkan di ${latlng.lat.toFixed(3)},${latlng.lng.toFixed(3)}`);
+    return true;
+}
+
+// ── Reset fasilitas ──
+function resetAllFacilities(){
+    facilities.forEach(f=>{ if(f.marker&&map.hasLayer(f.marker))map.removeLayer(f.marker); });
+    industrialFacilities.forEach(f=>{ if(f.marker&&map.hasLayer(f.marker))map.removeLayer(f.marker); });
+    facilities=[]; industrialFacilities=[]; facGameOver=false; lastFacProdTime=0;
+    pendingFacType=null; pendingFacTemplate=null; pendingWarehouseType=null;
+    Object.keys(FAC_FX).forEach(k=>{ FAC_FX[k]=k==='missileFactory'||k==='interceptorFactory'?true:false; });
+    // Reset gudang
+    if(missileWarehouse){ missileWarehouse.remove(); missileWarehouse=null; }
+    if(interceptorWarehouse){ interceptorWarehouse.remove(); interceptorWarehouse=null; }
+    _updateFacUI(); _updateIndUI(); _updateWarehouseUI(); _applyFacEffects();
+    logMessage('🏭 Semua fasilitas & gudang direset');
+}
+
+// ── Point 5: Cek fasilitas wajib — jika belum dibangun, operasi terkena dampak ──
+function _checkRequiredFacilities(operation) {
+    const missing = [];
+    const hasMissileFactory    = industrialFacilities.some(f => f.type==='missile'     && !f.destroyed);
+    const hasInterceptFac      = industrialFacilities.some(f => f.type==='interceptor' && !f.destroyed);
+    const hasOilRefinery       = facilities.some(f => f.type==='oil'     && !f.destroyed);
+    const hasCommandCenter     = facilities.some(f => f.type==='command' && !f.destroyed);
+    const hasMissileWarehouse  = !!missileWarehouse;
+    const hasInterceptWarehouse= !!interceptorWarehouse;
+    if (operation === 'launch') {
+        if (!hasMissileFactory)    missing.push('🏭 Pabrik Rudal belum dibangun — peluncuran tidak bisa dilakukan');
+        if (!hasMissileWarehouse)  missing.push('📦 Gudang Rudal belum dibangun — tidak ada amunisi tersimpan');
+        if (!hasCommandCenter)     missing.push('📡 Pusat Komando belum dibangun — koordinasi arah tembak terganggu');
+        if (!hasOilRefinery)       missing.push('🛢️ Kilang Minyak belum dibangun — BBM truck launcher tidak tersedia');
+    }
+    if (operation === 'defense') {
+        if (!hasInterceptFac)       missing.push('🏭 Pabrik Interceptor belum dibangun — sistem pertahanan tidak aktif');
+        if (!hasInterceptWarehouse) missing.push('📦 Gudang Interceptor belum dibangun — tidak ada interseptor tersimpan');
+    }
+    return missing;
+}
+
+// HUD mini status fasilitas di layar (diperbarui tiap 3 detik)
+function _updateFacStatusHUD() {
+    const hasMF  = industrialFacilities.some(f=>f.type==='missile'     &&!f.destroyed);
+    const hasIF  = industrialFacilities.some(f=>f.type==='interceptor' &&!f.destroyed);
+    const hasOil = facilities.some(f=>f.type==='oil'     &&!f.destroyed);
+    const hasCmd = facilities.some(f=>f.type==='command' &&!f.destroyed);
+    const hasMW  = !!missileWarehouse;
+    const hasIW  = !!interceptorWarehouse;
+    let el = document.getElementById('facStatusHUD');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'facStatusHUD';
+        el.style.cssText = 'position:fixed;top:58px;right:12px;z-index:1003;font-family:"Share Tech Mono",monospace;font-size:8px;line-height:1.7;pointer-events:none;';
+        document.body.appendChild(el);
+    }
+    const dot = ok => ok
+        ? '<span style="color:#44ff44;">✔</span>'
+        : '<span style="color:#ff4444;animation:blink .6s infinite;">✘</span>';
+    el.innerHTML = `<div style="background:rgba(2,4,8,0.88);border:1px solid #0a2040;padding:4px 7px;border-radius:3px;">
+<div style="color:#00aaff;letter-spacing:1px;margin-bottom:1px;font-size:7px;">⚙️ FASILITAS</div>
+${dot(hasMF)} 🏭 Pabrik Rudal &nbsp; ${dot(hasIF)} 🏭 Pabrik Interseptor<br>
+${dot(hasMW)} 📦 Gudang Rudal &nbsp;&nbsp; ${dot(hasIW)} 📦 Gudang Interseptor<br>
+${dot(hasOil)} 🛢️ Kilang Minyak &nbsp; ${dot(hasCmd)} 📡 Pusat Komando
+</div>`;
+}
+setInterval(_updateFacStatusHUD, 3000);
+setTimeout(_updateFacStatusHUD, 1000);
+
+// ── Patch BallisticMissile.createGifExplosion untuk damage fasilitas ──
+(function(){
+    const orig=BallisticMissile.prototype.createGifExplosion;
+    BallisticMissile.prototype.createGifExplosion=function(lat,lng,vel){
+        orig.call(this,lat,lng,vel);
+        _damageNearbyFacilities(lat,lng,vel);
+    };
+})();
+
+// ── Patch MobileUnit.startReload untuk cek pabrik ──
+(function(){
+    const orig=MobileUnit.prototype.startReload;
+    MobileUnit.prototype.startReload=function(){
+        if(this.type==='launcher'&&!FAC_FX.missileFactory){
+            logMessage(`⚠️ [${this.truckName}] Pabrik Rudal hancur — tidak bisa reload!`); return;
+        }
+        if(this.type==='defense'&&!FAC_FX.interceptorFactory){
+            logMessage(`⚠️ [${this.defenseName||this.id}] Pabrik Interceptor hancur — tidak bisa reload!`); return;
+        }
+        orig.call(this);
+    };
+})();
+
+// ── Patch launchFromUnit untuk efek command center & game over ──
+(function(){
+    const orig=launchFromUnit;
+    launchFromUnit=async function(unitId){
+        if(facGameOver){ logMessage('💀 GAME OVER! Reset mission untuk bermain lagi.'); return; }
+
+        // ── Point 5: Cek fasilitas wajib sebelum launch ──
+        const missingFac = _checkRequiredFacilities('launch');
+        if (missingFac.length > 0) {
+            const msg = '⚠️ FASILITAS BELUM DIBANGUN:\n' + missingFac.join('\n') + '\n\nBangun fasilitas tersebut dulu via sidebar!';
+            alert(msg);
+            missingFac.forEach(m => logMessage('⛔ ' + m));
+            return;
+        }
+
+        if(FAC_FX.command){
+            const unit=findUnitById(unitId);
+            if(unit&&unit.targetPos&&unit.pos){
+                const err=(Math.random()-0.5)*30;
+                const trueAzi=calculateAzimuth(unit.pos,unit.targetPos);
+                document.getElementById('azimuth').value=(trueAzi+err).toFixed(3);
+                logMessage(`⚠️ [PUSKOM HANCUR] Azimuth terganggu ±${Math.abs(err).toFixed(1)}°`);
+            }
+        }
+        await orig(unitId);
+    };
+})();
+
+// ── Patch gameLoop: gunakan _facProductionV2 (gudang self-managing) ──
+(function(){
+    const orig=gameLoop;
+    gameLoop=function(){
+        const now=performance.now()/1000;
+        _facProductionV2(now); // noop — gudang sudah self-managing
+        orig();
+    };
+})();
+
+// ── Point 5: Patch scanAndEngage untuk cek fasilitas pertahanan ──
+(function(){
+    const orig = DefenseBattery.prototype.scanAndEngage;
+    DefenseBattery.prototype.scanAndEngage = function(currentTime, missiles) {
+        const missingDef = _checkRequiredFacilities('defense');
+        if (missingDef.length > 0) return false; // pertahanan tidak bisa beroperasi
+        return orig.call(this, currentTime, missiles);
+    };
+})();
+
+// ── Patch resetMission untuk reset fasilitas ──
+(function(){
+    const orig=resetMission;
+    resetMission=function(){ orig(); resetAllFacilities(); };
+})();
+
+// ── Injeksi UI fasilitas ke sidebar ──
+(function injectFacilityUI(){
+    const inner=document.querySelector('.sidebar-inner');
+    if(!inner)return;
+
+    // Panel Fasilitas Strategis
+    const sp=document.createElement('div');
+    sp.innerHTML=`
+<div class="sec-title">🏭 FASILITAS STRATEGIS</div>
+<div id="facList" style="background:#070d14;border:1px solid #1e3a5f;border-radius:4px;padding:6px 8px;margin-bottom:6px;min-height:20px;"></div>
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">${
+    STRATEGIC_TEMPLATES.map(t=>`<button class="btn-add" style="font-size:8px;padding:4px 6px;flex:0 0 calc(50% - 2px);" onclick="startPlaceFacility('strategic',STRATEGIC_TEMPLATES.find(x=>x.type==='${t.type}'))">➕ ${t.name}</button>`).join('')
+}</div>`;
+    inner.appendChild(sp);
+
+    // Panel Industri
+    const ip=document.createElement('div');
+    ip.innerHTML=`
+<div class="sec-title">⚙️ INDUSTRI PERSENJATAAN</div>
+<div id="indList" style="background:#070d14;border:1px solid #1e3a5f;border-radius:4px;padding:6px 8px;margin-bottom:6px;min-height:20px;"></div>
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">${
+    INDUSTRIAL_TEMPLATES.map(t=>`<button class="btn-add" style="font-size:8px;padding:4px 6px;flex:0 0 calc(50% - 2px);" onclick="startPlaceFacility('industrial',INDUSTRIAL_TEMPLATES.find(x=>x.type==='${t.type}'))">➕ ${t.name}</button>`).join('')
+}</div>`;
+    inner.appendChild(ip);
+
+    // Panel Gudang Amunisi
+    const wp = document.createElement('div');
+    wp.innerHTML = `
+<div class="sec-title">📦 GUDANG AMUNISI</div>
+<div style="background:#070d14;border:1px solid #1e3a5f;border-radius:4px;padding:8px;margin-bottom:6px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+    <span style="font-size:9px;color:#ff8844;">🚀 Gudang Rudal:</span>
+    <span id="whMissileInfo" style="font-size:9px;color:#4a6a7a;">Belum dibangun</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+    <span style="font-size:9px;color:#44aaff;">🛡️ Gudang Interseptor:</span>
+    <span id="whInterceptorInfo" style="font-size:9px;color:#4a6a7a;">Belum dibangun</span>
+  </div>
+  <div style="font-size:8px;color:#2a5a3a;margin-bottom:6px;">Build: klik gudang untuk mulai produksi | Setiap ${WAREHOUSE_BUILD_TIME}s → +${WAREHOUSE_BATCH_SIZE} ammo ke gudang | Reload vehicle: 60s dari gudang</div>
+  <div style="display:flex;gap:4px;">
+    <button class="btn-add" style="font-size:8px;padding:4px 6px;flex:1;" onclick="startBuildWarehouse('missile')">🏗️ Bangun Gudang Rudal</button>
+    <button class="btn-add" style="font-size:8px;padding:4px 6px;flex:1;" onclick="startBuildWarehouse('interceptor')">🏗️ Gudang Interseptor</button>
+  </div>
+</div>`;
+    inner.appendChild(wp);
+
+    _updateFacUI(); _updateIndUI(); _updateWarehouseUI();
+})();
+
+// ── Inject facility click priority ke map ──
+// Kita perlu intercept map click SEBELUM handler lain
+// Gunakan pendekatan: di dalam handler asli sudah ada prioritas sistem,
+// tinggal tambahkan di awal: cek pendingFacType
+// Ini dilakukan dengan menambah satu listener lagi (Leaflet tidak mengganti, tapi menambah)
+// Untuk prioritas kita gunakan prepend workaround:
+map.off('click'); // hapus semua click listener
+// Re-add dari initMap logic — kita re-wrap
+map.on('click', function(e){
+    if(e.originalEvent&&e.originalEvent.target&&e.originalEvent.target.closest&&e.originalEvent.target.closest('.leaflet-popup'))return;
+    // PRIORITAS 1a: Penempatan gudang amunisi
+    if(pendingWarehouseType){ _handleWarehouseClick(e.latlng); return; }
+    // PRIORITAS 1b: Penempatan fasilitas strategis/industri
+    if(pendingFacType){ _handleFacClick(e.latlng); return; }
+    // PRIORITAS 2: Penambahan unit
+    if(addUnitMode){ handleAddUnitClick(e.latlng); return; }
+    // PRIORITAS 3: Route picking
+    if(routePickingForUnit){ handleRoutePickingClick(e.latlng); return; }
+    // PRIORITAS 4: Per-launcher target picking
+    if(setTargetForUnitId){
+        const unit=findUnitById(setTargetForUnitId);
+        if(unit){
+            if(unit._targetMarker){if(map.hasLayer(unit._targetMarker))map.removeLayer(unit._targetMarker);unit._targetMarker=null;}
+            unit.targetPos=null;
+            unit.targetPos=[e.latlng.lat,e.latlng.lng];
+            const tgtIcon=L.divIcon({className:'tactical-marker',html:`<div class="target-marker"><div class="death-ring"></div><div class="death-core"></div><div class="skull-icon" style="font-size:11px;">${unit.missileEmoji}</div></div>`,iconSize:[28,28],iconAnchor:[14,14]});
+            unit._targetMarker=L.marker(unit.targetPos,{icon:tgtIcon,zIndexOffset:500,interactive:false}).addTo(map);
+            unit._targetMarker.bindTooltip(`💀 ${unit.truckName} | ${unit.missileEmoji} ${unit.missileName}`,{direction:'top',permanent:false}).openTooltip();
+            if(unit.pos){
+                const dist=map.distance(unit.pos,unit.targetPos)/1000;
+                const azi=calculateAzimuth(unit.pos,unit.targetPos);
+                document.getElementById('azimuth').value=azi.toFixed(3);
+                logMessage(`🎯 [${unit.truckName}] TARGET DIKUNCI: ${dist.toFixed(1)}km | AZ:${azi.toFixed(1)}°`);
+                updateAutoPitchPanel(dist,unit.id);
+            }
+            unit.updatePopup(); cancelSetTarget(); updateStatus('🎯 TARGET LOCKED',false);
+        }
+        return;
+    }
+    // PRIORITAS 5: Info panduan (tidak ada mode aktif)
+    const hasSiaga=launcherUnits.some(u=>u.state==='siaga');
+    if(launcherUnits.length===0) logMessage('⚠️ Tambahkan launcher dulu (➕ ADD LAUNCHER di sidebar)');
+    else if(!hasSiaga) logMessage('⚠️ Klik marker launcher → ⚡ Siaga → 🎯 SET TARGET');
+    else logMessage('ℹ️ Klik marker launcher → 🎯 SET TARGET untuk set/ganti target');
+});
+
+logMessage('🏭 SISTEM FASILITAS AKTIF — tempatkan fasilitas strategis & industri via sidebar');
+// ══════════════════════════════════════════════════════════════════
+//  END FASILITAS SYSTEM
+// ══════════════════════════════════════════════════════════════════
+
+</script>
+</body>
+</html>
