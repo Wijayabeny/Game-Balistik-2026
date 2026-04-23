@@ -1268,13 +1268,20 @@ class DefenseBattery {
         if (!missile.isActive) return false; 
         if (!this.getMissileThreatCategory(missile)) return false; 
         const horizDist = this.map.distance([this.lat, this.lng], [missile.lat, missile.lng]); 
-        if (horizDist > this.engagementRange) return false; 
-        if (horizDist < this.system.minEngagementRange) return false; 
+        if (horizDist > this.engagementRange) return false;
+        // Cruise missiles fly low — skip minEngagementRange to allow close-in shots
+        if (!missile.isCruise && horizDist < this.system.minEngagementRange) return false;
         if (horizDist > this.radarRange) return false; 
-        const alt = missile.alt; 
-        if (alt < this.system.minEngageAlt) return false; 
-        if (alt > this.system.maxEngageAlt) return false; 
-        if (this.system.requireDescending && missile.vz > 0) return false; 
+        const alt = missile.alt;
+        // Cruise missiles fly level (vz≈0) — skip minEngageAlt & requireDescending checks
+        const isCruiseThreat = missile.isCruise;
+        if (!isCruiseThreat) {
+            if (alt < this.system.minEngageAlt) return false;
+            if (alt > this.system.maxEngageAlt) return false;
+            if (this.system.requireDescending && missile.vz > 0) return false;
+        } else {
+            if (alt > this.system.maxEngageAlt) return false;
+        } 
         const mach = Math.hypot(missile.vx, missile.vy, missile.vz) / SPEED_OF_SOUND; 
         if (mach > this.system.maxTargetMach) return false; 
         return true; 
@@ -1283,7 +1290,8 @@ class DefenseBattery {
         if (!this.isActive) return false; 
         if (!this.mobileUnit) return false;
         if (this.mobileUnit.ammo <= 0 || this.mobileUnit.reloading) return false;
-        if (currentTime - this.lastShotTime < this.system.reloadTime) return false; 
+        const SHOT_COOLDOWN = 2.0; // seconds between shots (separate from ammo reload time)
+        if (currentTime - this.lastShotTime < SHOT_COOLDOWN) return false; 
         let best = null, bestDist = Infinity; 
         for (const m of missiles) { 
             if (!m.isActive || (m.targetedBy && m.targetedBy.has(this))) continue; 
@@ -2239,8 +2247,8 @@ setTimeout(_updateFacStatusHUD, 1000);
 (function(){
     const orig = DefenseBattery.prototype.scanAndEngage;
     DefenseBattery.prototype.scanAndEngage = function(currentTime, missiles) {
-        const missingDef = _checkRequiredFacilities('defense');
-        if (missingDef.length > 0) return false; // pertahanan tidak bisa beroperasi
+        // Fasilitas hanya mempengaruhi efisiensi, bukan memblokir pertahanan sepenuhnya
+        // (blokir hard menyebabkan interceptor tidak keluar sama sekali)
         return orig.call(this, currentTime, missiles);
     };
 })();
